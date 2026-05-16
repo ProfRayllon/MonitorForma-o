@@ -1,0 +1,628 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MonitorFormação — Secretaria de Educação</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main id="app" class="app-shell">
+
+      <!-- LOGIN -->
+      <section class="login-screen" data-view="login">
+
+        <div class="login-hero">
+          <div class="login-bg-wrap">
+            <img src="login-bg.jpg" alt="" class="login-bg-img" onerror="this.parentElement.style.display='none'" />
+          </div>
+          <div class="login-hero-overlay"></div>
+
+          <div class="login-hero-inner">
+            <div class="login-logo">
+              <div class="logo-mark-lg">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+              </div>
+              <span>Monitor<strong>Formação</strong></span>
+            </div>
+
+            <div class="login-hero-body">
+              <h1>Monitore o progresso das formações <em>educacionais</em></h1>
+              <p class="login-desc">Acompanhe inscrição e credenciamento por escola, com recorte por GRE e foco na formação de diretores da rede estadual.</p>
+              <div class="login-stats">
+                <div class="stat-chip">
+                  <div class="stat-chip-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                  </div>
+                  <strong>599</strong>
+                  <span>Escolas monitoradas</span>
+                </div>
+                <div class="stat-chip">
+                  <div class="stat-chip-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                  </div>
+                  <strong>16</strong>
+                  <span>GREs cadastradas</span>
+                </div>
+                <div class="stat-chip">
+                  <div class="stat-chip-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M12 14v4"/><path d="M10 16h4"/></svg>
+                  </div>
+                  <strong>16 mil+</strong>
+                  <span>Profissionais</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="login-right">
+          <form class="login-card" id="loginForm" autocomplete="off">
+            <div class="login-brand-sm">
+              <div class="brand-mark">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+              </div>
+              <span>MonitorFormação</span>
+            </div>
+
+            <div class="login-card-header">
+              <h2>Entrar no painel</h2>
+              <p class="muted">Use as credenciais fornecidas pelo administrador do sistema.</p>
+            </div>
+
+            <label>
+              E-mail
+              <div class="login-input-wrap">
+                <svg class="login-input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                <input name="email" type="email" placeholder="seuemail@educacao.pb.gov.br" autocomplete="off" required />
+              </div>
+            </label>
+
+            <label>
+              Senha
+              <div class="login-input-wrap">
+                <svg class="login-input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <input id="senhaInput" name="senha" type="password" placeholder="••••••••" autocomplete="new-password" required />
+                <button type="button" class="pass-toggle" id="passToggle" aria-label="Mostrar senha" tabindex="-1">
+                  <svg id="eyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+              </div>
+            </label>
+
+            <button class="btn-primary btn-full" type="submit">Acessar o painel</button>
+            <p class="hint" id="loginHint"></p>
+            <p class="error" id="loginError" role="alert"></p>
+          </form>
+          <p class="login-footer-text">Secretaria de Estado da Educação — Paraíba &copy; 2026</p>
+        </div>
+      </section>
+
+      <!-- DASHBOARD -->
+      <section class="dashboard hidden" data-view="dashboard">
+
+        <aside class="sidebar">
+          <div class="brand">
+            <div class="brand-mark">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+            </div>
+            <div>
+              <strong>MonitorFormação</strong>
+              <small id="userScope">GRE</small>
+            </div>
+          </div>
+
+          <div class="sidebar-user" id="sidebarUser"></div>
+
+          <nav class="sidebar-nav">
+            <span class="nav-group-label admin-only">Principal</span>
+            <button class="nav-item admin-only" data-tab="home">
+              <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+              Início
+            </button>
+            <span class="nav-group-label">Monitoramento</span>
+            <button class="nav-item active" data-tab="formation">
+              <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+              Formações
+            </button>
+            <span class="nav-group-label admin-only">Administrativo</span>
+            <button class="nav-item admin-only" data-tab="users">
+              <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              Usuários
+            </button>
+          </nav>
+
+          <div class="sidebar-bottom">
+            <button class="nav-item" data-tab="profile">
+              <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              Meu Perfil
+            </button>
+            <button class="ghost-button" id="logoutButton">
+              <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              Sair do sistema
+            </button>
+          </div>
+        </aside>
+
+        <section class="content">
+          <header class="topbar">
+            <div>
+              <p class="eyebrow" id="profileLabel">Formação</p>
+              <h2 id="pageTitle">Acompanhamento de formações</h2>
+            </div>
+            <div class="topbar-right-wrap">
+              <div class="db-status-badge" id="dbStatusBadge"></div>
+              <div class="topbar-user-wrap" id="topbarUserWrap"></div>
+            </div>
+          </header>
+
+          <!-- HOME (admin) -->
+          <section class="tab-panel hidden" data-panel="home">
+            <div id="homeDashboard"></div>
+          </section>
+
+          <!-- FORMAÇÕES -->
+          <section class="tab-panel" data-panel="formation">
+            <section class="formation-home" id="formationHome">
+              <div class="section-title">
+                <p class="eyebrow">Selecionar tipo</p>
+                <h3>Qual formação deseja acompanhar?</h3>
+              </div>
+              <div class="choice-grid">
+                <button class="choice-card" id="directorsChoice">
+                  <div class="choice-icon-wrap">
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+                  </div>
+                  <span class="choice-tag">Formação ativa</span>
+                  <strong>Diretores</strong>
+                  <small>Inscrição e credenciamento por escola, com meta baseada no total de escolas da rede estadual.</small>
+                  <div class="choice-cta">
+                    Acessar
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                  </div>
+                </button>
+                <button class="choice-card muted-choice" id="teachersChoice">
+                  <div class="choice-icon-wrap muted-icon">
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                  </div>
+                  <span class="choice-tag muted-tag">Em breve</span>
+                  <strong>Professores</strong>
+                  <small>Em desenvolvimento. Esta área será destinada ao monitoramento de formações para professores da rede estadual.</small>
+                  <div class="choice-cta muted-cta">Em desenvolvimento</div>
+                </button>
+              </div>
+            </section>
+
+            <section class="hidden" id="teachersEmpty">
+              <button class="back-button" data-back-home aria-label="Voltar">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                Voltar
+              </button>
+              <article class="panel empty-state">
+                <div class="empty-icon-wrap">
+                  <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                </div>
+                <p class="eyebrow">Em desenvolvimento</p>
+                <h3>Formações de Professores</h3>
+                <p class="muted">Esta área está reservada para o módulo de formação de professores. Neste momento, o foco principal está na formação de diretores escolares da rede estadual.</p>
+              </article>
+            </section>
+
+            <section class="hidden" id="directorsArea">
+              <div class="section-title row-title" id="formationListHeader">
+                <div>
+                  <p class="eyebrow">Diretores</p>
+                  <h3>Formações cadastradas</h3>
+                </div>
+                <div class="formation-admin-tabs admin-only" id="formationAdminTabs">
+                  <button class="secondary active" type="button" data-formation-admin-view="list">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
+                    Formações
+                  </button>
+                  <button class="secondary" type="button" data-formation-admin-view="form">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+                    Cadastrar
+                  </button>
+                </div>
+              </div>
+
+              <form class="panel formation-form hidden admin-only" id="formationForm">
+                <div class="panel-head">
+                  <div>
+                    <p class="eyebrow">Administrativo</p>
+                    <h3 id="formationFormTitle">Cadastrar formação</h3>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <label>
+                    Nome da formação
+                    <input name="nome" placeholder="Ex: Formação de Diretores 2026" required />
+                  </label>
+                  <label>
+                    Público-alvo
+                    <input name="publico" value="Diretores escolares" required />
+                  </label>
+                </div>
+                <div class="form-row">
+                  <label>
+                    Quantitativo esperado
+                    <input name="esperado" type="number" min="1" value="599" required />
+                  </label>
+                  <label>
+                    URL da planilha online
+                    <input name="sheetUrl" placeholder="Link publicado ou de compartilhamento do Google Sheets" />
+                  </label>
+                </div>
+                <label>
+                  Foto da formação
+                  <input name="foto" type="file" accept="image/*" />
+                </label>
+                <p class="hint" id="formationPhotoHint"></p>
+                <div class="form-actions">
+                  <button class="secondary" id="cancelFormationForm" type="button">Cancelar</button>
+                  <button type="submit" id="formationSubmitButton">Salvar formação</button>
+                </div>
+                <p class="hint">A planilha deve estar publicada na web e conter: GRE, INEP, ESCOLA, NOME, MATRICULA, INSCRITO e CREDENCIADO.</p>
+              </form>
+
+              <div class="formation-grid" id="formationCards"></div>
+
+              <section class="hidden" id="formationDetail">
+                <div class="detail-header">
+                  <div class="detail-actions">
+                    <button class="back-button" id="backToFormations" aria-label="Voltar para formações">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                      Voltar para formações
+                    </button>
+                    <button class="secondary admin-only" id="editFormationUrl">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                      Adicionar URL
+                    </button>
+                    <button class="secondary admin-only" id="syncFormation">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+                      Atualizar agora
+                    </button>
+                  </div>
+                </div>
+                <div class="detail-title">
+                  <h3 id="formationName">Formação</h3>
+                  <p class="hint admin-only" id="formationSyncStatus"></p>
+                </div>
+
+                <div class="metrics-grid" id="formationMetrics"></div>
+
+                <article class="panel regional-insights hidden" id="regionalInsights">
+                  <div class="panel-head compact-head">
+                    <div>
+                      <p class="eyebrow">Credenciamento</p>
+                      <h3>Panorama da regional</h3>
+                    </div>
+                  </div>
+                  <div class="regional-grid">
+                    <div class="credential-focus">
+                      <div class="credential-gauge" id="credentialGauge">
+                        <span id="credentialPercent">0%</span>
+                      </div>
+                      <div class="credential-copy">
+                        <strong id="credentialSummary">0 de 0 escolas credenciadas</strong>
+                        <p class="hint" id="credentialHint">Aguardando dados de credenciamento.</p>
+                        <div class="credential-stats">
+                          <span id="credentialDoneLabel">Credenciadas 0</span>
+                          <span id="credentialPendingLabel">Pendentes 0</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+
+                <article class="panel goal-panel admin-only" id="goalPanel">
+                  <div class="panel-head compact-head">
+                    <div>
+                      <p class="eyebrow">Verificação por GRE</p>
+                      <h3 id="goalChartTitle">Inscritas por GRE</h3>
+                    </div>
+                    <div class="goal-toggle" id="goalChartToggle">
+                      <button class="secondary active" type="button" data-goal-mode="inscritos">Inscritas</button>
+                      <button class="secondary" type="button" data-goal-mode="credenciados">Credenciadas</button>
+                    </div>
+                  </div>
+                  <div class="goal-grid">
+                    <div>
+                      <div class="goal-chart" id="greBars"></div>
+                      <div class="goal-bar-legend" id="goalBarLegend"></div>
+                    </div>
+                    <div class="goal-pie-wrap">
+                      <div class="goal-pie" id="grePie"></div>
+                    </div>
+                  </div>
+                </article>
+
+                <article class="panel filters-panel">
+                  <div class="panel-head">
+                    <div>
+                      <p class="eyebrow">Filtros</p>
+                      <h3>Localizar escolas</h3>
+                    </div>
+                  </div>
+                  <div class="filter-row">
+                    <div class="search-wrap">
+                      <svg class="search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                      <input class="search" id="schoolSearch" placeholder="Buscar por escola, INEP ou GRE..." />
+                    </div>
+                    <select id="statusFilter">
+                      <option value="todos">Todas as escolas</option>
+                      <option value="inscritas">Inscritas</option>
+                      <option value="nao-inscritas">Não inscritas</option>
+                      <option value="credenciadas">Credenciadas</option>
+                      <option value="nao-credenciadas">Não credenciadas</option>
+                    </select>
+                  </div>
+                </article>
+
+                <article class="panel">
+                  <div class="panel-head">
+                    <div>
+                      <p class="eyebrow">Escolas</p>
+                      <h3>Acompanhamento detalhado</h3>
+                    </div>
+                    <div class="export-actions">
+                      <button class="secondary" id="downloadSpreadsheet" type="button">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                        Planilha CSV
+                      </button>
+                      <button class="secondary" id="downloadPdf" type="button">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        Exportar PDF
+                      </button>
+                    </div>
+                  </div>
+                  <div class="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>GRE</th>
+                          <th>INEP</th>
+                          <th>Escola</th>
+                          <th>Inscrito</th>
+                          <th>Credenciado</th>
+                          <th>Representante</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody id="schoolsTable"></tbody>
+                    </table>
+                  </div>
+                </article>
+              </section>
+            </section>
+          </section>
+
+          <!-- USUÁRIOS -->
+          <section class="tab-panel hidden" data-panel="users">
+            <article class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Administrativo</p>
+                  <h3>Gerenciamento de usuários</h3>
+                </div>
+                <button class="secondary" id="addUser">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+                  Adicionar usuário
+                </button>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Nome</th>
+                      <th>E-mail</th>
+                      <th>Senha</th>
+                      <th>Perfil</th>
+                      <th>GRE</th>
+                      <th>Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody id="usersTable"></tbody>
+                </table>
+              </div>
+              <p class="hint" style="margin-top:14px">Alterações são salvas automaticamente no banco de dados do Supabase.</p>
+            </article>
+          </section>
+
+          <!-- PERFIL -->
+          <section class="tab-panel hidden" data-panel="profile">
+            <div class="profile-layout">
+              <div class="profile-main">
+                <article class="panel">
+                  <div class="panel-head">
+                    <div>
+                      <p class="eyebrow">Conta</p>
+                      <h3>Meu Perfil</h3>
+                    </div>
+                  </div>
+                  <div class="profile-avatar-section" id="profileAvatarSection"></div>
+                  <form id="profileForm">
+                    <div class="form-row">
+                      <label>
+                        Nome completo
+                        <input id="profileNome" name="nome" placeholder="Seu nome completo" required />
+                      </label>
+                      <label>
+                        E-mail
+                        <input id="profileEmail" name="email" type="email" placeholder="seuemail@educacao.pb.gov.br" required />
+                      </label>
+                    </div>
+                    <div class="form-actions" style="margin-top:8px">
+                      <button type="submit" id="profileSaveButton">Salvar alterações</button>
+                    </div>
+                    <p class="error" id="profileError" role="alert"></p>
+                  </form>
+                </article>
+
+                <article class="panel" style="margin-top:14px">
+                  <div class="panel-head">
+                    <div>
+                      <p class="eyebrow">Segurança</p>
+                      <h3>Alterar senha</h3>
+                    </div>
+                  </div>
+                  <form id="passwordForm">
+                    <div class="form-row">
+                      <label>
+                        Nova senha
+                        <input id="profileNewPassword" name="newPassword" type="password" placeholder="Digite a nova senha" autocomplete="new-password" />
+                      </label>
+                      <label>
+                        Confirmar nova senha
+                        <input id="profileConfirmPassword" name="confirmPassword" type="password" placeholder="Repita a nova senha" autocomplete="new-password" />
+                      </label>
+                    </div>
+                    <div class="form-actions" style="margin-top:8px">
+                      <button type="submit" id="passwordSaveButton">Alterar senha</button>
+                    </div>
+                    <p class="error" id="passwordError" role="alert"></p>
+                  </form>
+                </article>
+              </div>
+
+              <aside class="profile-side">
+                <article class="panel">
+                  <div class="panel-head">
+                    <div>
+                      <p class="eyebrow">Acesso</p>
+                      <h3>Informações de acesso</h3>
+                    </div>
+                  </div>
+                  <div class="info-list" id="profileInfoList"></div>
+                </article>
+              </aside>
+            </div>
+          </section>
+
+        </section>
+      </section>
+
+      <!-- DIALOGS -->
+      <dialog class="school-dialog" id="schoolDialog">
+        <div class="dialog-head">
+          <div>
+            <p class="eyebrow" id="dialogGre">GRE</p>
+            <h3 id="dialogTitle">Escola</h3>
+          </div>
+          <button class="icon-button" id="closeDialog" aria-label="Fechar">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div class="detail-grid" id="schoolDetails"></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Matrícula</th>
+                <th>Nome</th>
+                <th>Inscrito</th>
+                <th>Credenciado</th>
+              </tr>
+            </thead>
+            <tbody id="schoolPeople"></tbody>
+          </table>
+        </div>
+      </dialog>
+
+      <dialog class="school-dialog" id="sheetUrlDialog">
+        <form id="sheetUrlForm" method="dialog">
+          <div class="dialog-head">
+            <div>
+              <p class="eyebrow">Planilha online</p>
+              <h3>Adicionar ou alterar URL</h3>
+            </div>
+            <button class="icon-button" id="closeSheetUrlDialog" type="button" aria-label="Fechar">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <label class="url-field">
+            URL da planilha online
+            <input name="sheetUrl" id="sheetUrlInput" placeholder="Cole o link publicado ou o link de compartilhamento do Google Sheets" />
+          </label>
+          <p class="hint" style="margin-top:10px">Use <strong>Arquivo &gt; Compartilhar &gt; Publicar na web</strong> no Google Sheets. O painel atualiza automaticamente a cada 2 minutos.</p>
+          <div class="dialog-actions">
+            <button class="secondary danger-button" id="clearSheetUrl" type="button">Remover URL</button>
+            <button class="secondary" type="submit">Salvar URL</button>
+          </div>
+        </form>
+      </dialog>
+
+      <dialog class="school-dialog confirm-dialog" id="deleteFormationDialog">
+        <div class="dialog-head">
+          <div>
+            <p class="eyebrow">Atenção</p>
+            <h3>Excluir formação?</h3>
+          </div>
+          <div class="dialog-warn-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+          </div>
+        </div>
+        <p class="muted">Esta ação vai remover permanentemente <strong id="deleteFormationName">esta formação</strong> e todos os dados de escolas associados. Esta ação não pode ser desfeita.</p>
+        <div class="dialog-actions">
+          <button class="secondary" id="cancelDeleteFormation" type="button">Cancelar</button>
+          <button class="secondary danger-button" id="confirmDeleteFormation" type="button">Sim, excluir</button>
+        </div>
+      </dialog>
+
+      <!-- ADD USER DIALOG -->
+      <dialog class="school-dialog" id="addUserDialog" style="width:min(560px,calc(100% - 28px))">
+        <form id="addUserForm">
+          <div class="dialog-head">
+            <div>
+              <p class="eyebrow">Novo acesso</p>
+              <h3>Adicionar usuário</h3>
+            </div>
+            <button class="icon-button" id="closeAddUserDialog" type="button" aria-label="Fechar">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <div class="form-row" style="margin-bottom:12px">
+            <label>
+              Nome completo
+              <input id="addUserNome" name="nome" placeholder="Nome do usuário" required />
+            </label>
+            <label>
+              E-mail
+              <input id="addUserEmail" name="email" type="email" placeholder="email@formacao.pb.gov.br" required />
+            </label>
+          </div>
+          <div class="form-row" style="margin-bottom:12px">
+            <label>
+              Senha inicial
+              <input id="addUserSenha" name="senha" type="password" placeholder="Senha de acesso" autocomplete="new-password" required />
+            </label>
+            <label>
+              Perfil de acesso
+              <select id="addUserPerfil" name="perfil">
+                <option value="regional">Regional</option>
+                <option value="admin">Administrador</option>
+              </select>
+            </label>
+          </div>
+          <label style="margin-bottom:4px">
+            GRE vinculada
+            <select id="addUserGre" name="gre"></select>
+          </label>
+          <p class="hint" style="margin-top:6px">Usuários com perfil <strong>Administrador</strong> têm acesso total. Usuários <strong>Regionais</strong> veem apenas sua GRE.</p>
+          <p class="error" id="addUserError" role="alert" style="margin-top:8px"></p>
+          <div class="dialog-actions">
+            <button class="secondary" id="cancelAddUser" type="button">Cancelar</button>
+            <button type="submit" id="addUserSubmit">Adicionar usuário</button>
+          </div>
+        </form>
+      </dialog>
+
+      <div class="toast-stack" id="toastStack" aria-live="polite" aria-atomic="true"></div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
