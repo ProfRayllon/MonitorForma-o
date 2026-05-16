@@ -151,16 +151,26 @@ async function loadUsers() {
   try {
     const { data: usuarios, error } = await db.from("usuarios").select("*").order("created_at", { ascending: true });
     if (error) throw error;
+
+    // Supabase vazio E localStorage também vazio → primeira execução, semeia usuários base
+    if (!usuarios?.length && !localUsers.length) {
+      const baseUsers = normalizeUsers(state.base.users || []);
+      await db.from("usuarios").upsert(baseUsers.map(toDbUser), { onConflict: "id" });
+      return baseUsers;
+    }
+
+    // Supabase vazio mas localStorage tem dados → primeira execução deste projeto no banco
     if (!usuarios?.length) {
-      const { error: seedError } = await db.from("usuarios").upsert(localUsers.map(toDbUser));
-      if (seedError) throw seedError;
+      await db.from("usuarios").upsert(localUsers.map(toDbUser), { onConflict: "id" });
       return localUsers;
     }
+
+    // Supabase é a fonte de verdade — sobrescreve localStorage
     const users = usuarios.map(fromDbUser);
     saveStored("monitor-users", users);
     return users;
   } catch (error) {
-    console.warn("Não foi possível carregar usuarios do Supabase. Usando dados locais.", error);
+    console.warn("Não foi possível carregar usuários do Supabase. Usando dados locais.", error);
     return localUsers;
   }
 }
@@ -200,41 +210,43 @@ async function deleteUserFromDb(id) {
 }
 
 async function loadFormations() {
-  const localFormations = normalizeFormationIds(loadStored("monitor-formations", [makeDefaultFormation()]));
+  const localFormations = normalizeFormationIds(loadStored("monitor-formations", []));
   if (!db) return localFormations;
+
   try {
-    const { data: formacoes, error } = await db.from("formacoes").select("*").order("created_at", { ascending: true });
+    const { data: formacoes, error } = await db
+      .from("formacoes")
+      .select("*")
+      .order("created_at", { ascending: true });
     if (error) throw error;
 
+    // Supabase conectado e retornou vazio → banco está vazio intencionalmente
+    // Só semeia se localStorage também estiver vazio (primeira execução)
     if (!formacoes?.length) {
-      // Nenhuma formação no Supabase — faz seed com as locais
-      await db.from("formacoes").upsert(localFormations.map(toDbFormation), { onConflict: "id" });
-      await Promise.all(localFormations.map((f) => persistFormationRows(f)));
-      return localFormations;
-    }
-
-    const formations = formacoes.map(fromDbFormation);
-    const remoteIds = new Set(formations.map((f) => f.id));
-
-    // Formacoes que existem no localStorage mas NAO no Supabase — sincronizar
-    const localOnly = localFormations.filter((f) => f.nome && !remoteIds.has(f.id));
-    if (localOnly.length) {
-      try {
-        await db.from("formacoes").upsert(localOnly.map(toDbFormation), { onConflict: "id" });
-      } catch (syncErr) {
-        console.warn("Não foi possível sincronizar formacoes locais:", syncErr);
+      if (!localFormations.length) {
+        // Primeira execução: cria uma formação padrão
+        const def = makeDefaultFormation();
+        await db.from("formacoes").upsert([toDbFormation(def)], { onConflict: "id" });
+        saveStored("monitor-formations", [def]);
+        return [def];
       }
-      // Inclui no resultado independentemente do sucesso do sync
-      formations.push(...localOnly);
+      // Banco vazio mas local tem dados → banco foi limpo intencionalmente, respeita isso
+      saveStored("monitor-formations", []);
+      return [];
     }
+
+    // Supabase tem formações → é a única fonte de verdade, ignora localStorage
+    const formations = formacoes.map(fromDbFormation);
 
     const { data: importedRows, error: rowsError } = await db.from("formacao_dados").select("*");
     if (rowsError) throw rowsError;
+
     const rowsByFormation = groupDbRows(importedRows || []);
     formations.forEach((f) => {
-      // Preferir dados do Supabase; fallback para rows locais
-      f.rows = rowsByFormation.get(f.id) || localFormations.find((lf) => lf.id === f.id)?.rows || [];
+      f.rows = rowsByFormation.get(f.id) || [];
     });
+
+    // Sincroniza localStorage com o estado real do Supabase
     saveStored("monitor-formations", formations);
     return formations;
   } catch (error) {
