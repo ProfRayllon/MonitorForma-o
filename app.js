@@ -271,6 +271,8 @@ function fromDbFormation(row) {
     foto: row.foto_url || "",
     rows: [],
     createdAt: row.created_at || new Date().toISOString(),
+    dataEvento: row.data_evento || "",
+    prazoInscricoes: row.prazo_inscricoes || "",
   };
 }
 
@@ -282,6 +284,8 @@ function toDbFormation(formation) {
     esperado: Number(formation.esperado || state.base?.schools?.length || 0),
     sheet_url: formation.sheetUrl || "",
     foto_url: formation.foto || "",
+    data_evento: formation.dataEvento || null,
+    prazo_inscricoes: formation.prazoInscricoes || null,
   };
 }
 
@@ -310,11 +314,7 @@ async function persistFormation(formation) {
   saveStored("monitor-formations", state.formations);
   if (!db) return;
 
-  // Foto como data URL pode ser grande — guarda localmente e envia sem ela se ultrapassar 1 MB
   const dbRecord = toDbFormation(formation);
-  if (dbRecord.foto_url && dbRecord.foto_url.length > 900_000) {
-    dbRecord.foto_url = "";
-  }
 
   const { error } = await db.from("formacoes").upsert(dbRecord, { onConflict: "id" });
   if (error) throw error;
@@ -373,6 +373,8 @@ function makeDefaultFormation() {
     foto: "",
     rows: [],
     createdAt: new Date().toISOString(),
+    dataEvento: "",
+    prazoInscricoes: "",
   };
 }
 
@@ -993,6 +995,8 @@ async function saveFormation(event) {
     formation.publico = String(form.get("publico") || "Diretores escolares").trim();
     formation.esperado = Number(form.get("esperado") || state.base.schools.length);
     formation.sheetUrl = normalizeSheetUrl(String(form.get("sheetUrl") || "").trim());
+    formation.dataEvento = String(form.get("dataEvento") || "").trim();
+    formation.prazoInscricoes = String(form.get("prazoInscricoes") || "").trim();
     if (foto) formation.foto = foto;
 
     if (!editingFormation) state.formations.push(formation);
@@ -1083,6 +1087,8 @@ function fillFormationForm(formation) {
   form.elements.publico.value = formation.publico || "Diretores escolares";
   form.elements.esperado.value = formation.esperado || state.base.schools.length;
   form.elements.sheetUrl.value = formation.sheetUrl || "";
+  form.elements.dataEvento.value = formation.dataEvento || "";
+  form.elements.prazoInscricoes.value = formation.prazoInscricoes || "";
   form.elements.foto.value = "";
   $("#formationFormTitle").textContent = "Editar formação";
   $("#formationSubmitButton").textContent = "Salvar alterações";
@@ -1091,11 +1097,30 @@ function fillFormationForm(formation) {
     : "Nenhuma foto cadastrada para esta formação.";
 }
 
+function compressImage(dataUrl, maxWidth = 900, quality = 0.75) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const ratio = Math.min(maxWidth / img.width, 1);
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.width * ratio);
+      canvas.height = Math.round(img.height * ratio);
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
 function readImageFile(file) {
   if (!(file instanceof File) || !file.size) return Promise.resolve("");
   return new Promise((resolve) => {
     const reader = new FileReader();
-    reader.addEventListener("load", () => resolve(String(reader.result || "")));
+    reader.addEventListener("load", () => {
+      const dataUrl = String(reader.result || "");
+      compressImage(dataUrl).then(resolve).catch(() => resolve(dataUrl));
+    });
     reader.addEventListener("error", () => resolve(""));
     reader.readAsDataURL(file);
   });
@@ -1134,6 +1159,14 @@ function summarizeFormation(formation) {
   return { total, inscritos, credenciados, duplicadas };
 }
 
+function daysUntil(dateStr) {
+  if (!dateStr) return null;
+  const target = new Date(dateStr + "T00:00:00");
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.ceil((target - today) / 86400000);
+}
+
 function renderFormationCards() {
   if (state.formationMode !== "directors") return;
   const isAdmin = state.user?.perfil === "admin";
@@ -1142,6 +1175,20 @@ function renderFormationCards() {
     .map((formation) => {
       const s = summarizeFormation(formation);
       const pI = s.total ? Math.round((s.inscritos / s.total) * 100) : 0;
+      const dPrazo = daysUntil(formation.prazoInscricoes);
+      const dEvento = daysUntil(formation.dataEvento);
+      const prazoHtml = dPrazo !== null
+        ? `<span class="countdown-badge ${dPrazo < 0 ? "expired" : dPrazo <= 7 ? "urgent" : ""}">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            ${dPrazo < 0 ? "Inscrições encerradas" : dPrazo === 0 ? "Último dia de inscrição" : `${dPrazo}d para fim das inscrições`}
+          </span>`
+        : "";
+      const eventoHtml = dEvento !== null
+        ? `<span class="countdown-badge event ${dEvento < 0 ? "expired" : dEvento <= 7 ? "urgent" : ""}">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            ${dEvento < 0 ? "Evento realizado" : dEvento === 0 ? "Evento hoje!" : `${dEvento}d para o evento`}
+          </span>`
+        : "";
       return `
         <article class="event-card">
           ${formation.foto ? `<img class="event-photo" src="${esc(formation.foto)}" alt="" />` : ""}
@@ -1156,6 +1203,7 @@ function renderFormationCards() {
             <span>${pct(s.inscritos, s.total)} inscrição</span>
             <span>${pct(s.credenciados, s.total)} credenciamento</span>
           </div>
+          ${prazoHtml || eventoHtml ? `<div class="countdown-row">${prazoHtml}${eventoHtml}</div>` : ""}
           <div class="card-actions">
             ${isAdmin ? `<button class="mini-button" data-edit-formation="${esc(formation.id)}">Editar</button>` : ""}
             ${isAdmin ? `<button class="mini-button danger-button" data-delete-formation="${esc(formation.id)}">Excluir</button>` : ""}

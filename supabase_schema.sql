@@ -11,6 +11,8 @@ create table if not exists public.formacoes (
   esperado integer not null default 0,
   sheet_url text not null default '',
   foto_url text not null default '',
+  data_evento date,
+  prazo_inscricoes date,
   created_at timestamptz not null default now()
 );
 
