@@ -366,8 +366,7 @@ async function persistFormation(formation) {
 async function persistFormationRows(formation) {
   saveStored("monitor-formations", state.formations);
   if (!db) return;
-  const { error: deleteError } = await db.from("formacao_dados").delete().eq("formacao_id", formation.id);
-  if (deleteError) throw deleteError;
+
   const schoolByInep = new Map(state.base.schools.map((s) => [String(s.inep), s]));
   const rows = (formation.rows || []).flatMap((row) => {
     const school = schoolByInep.get(String(row.inep));
@@ -386,8 +385,25 @@ async function persistFormationRows(formation) {
     }));
   });
   if (!rows.length) return;
+
+  // Lê IDs antigos ANTES de inserir — se insert falhar, dados antigos ficam intactos
+  const { data: existing } = await db
+    .from("formacao_dados")
+    .select("id")
+    .eq("formacao_id", formation.id);
+  const oldIds = (existing || []).map((r) => r.id);
+
+  // Insere novos dados
   const { error: insertError } = await db.from("formacao_dados").insert(rows);
-  if (insertError) throw insertError;
+  if (insertError) throw insertError; // falhou: dados antigos preservados, nada deletado
+
+  // Só deleta os antigos APÓS insert confirmado
+  if (oldIds.length) {
+    const chunkSize = 200;
+    for (let i = 0; i < oldIds.length; i += chunkSize) {
+      await db.from("formacao_dados").delete().in("id", oldIds.slice(i, i + chunkSize));
+    }
+  }
 }
 
 async function deleteFormationFromDb(id) {
@@ -420,6 +436,7 @@ function bindEvents() {
   on("#formationForm", "submit", saveFormation);
   on("#cancelFormationForm", "click", () => showAdminFormationView("list"));
   on("#backToFormations", "click", closeFormationDetail);
+  on("#reloadFormationsBtn", "click", reloadAllFormations);
   on("#reloadRecursoBtn", "click", reloadRecursoMap);
   on("#importCsvBtn", "click", () => $("#importCsvInput")?.click());
   on("#importCsvInput", "change", (e) => {
@@ -1531,6 +1548,20 @@ function updateSchoolField(inep, field, value) {
   // Auto-save após 1 segundo sem novas alterações
   clearTimeout(_autoSaveTimer);
   _autoSaveTimer = setTimeout(() => saveFormationChanges(), 1000);
+}
+
+async function reloadAllFormations() {
+  const btn = $("#reloadFormationsBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "Atualizando..."; }
+  try {
+    state.formations = await loadFormations();
+    render();
+    notify("Dados atualizados", "Formações e escolas recarregadas do banco.");
+  } catch (err) {
+    notify("Erro ao atualizar", err.message || "Verifique a conexão.", "error");
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Atualizar dados"; }
+  }
 }
 
 async function reloadRecursoMap() {
