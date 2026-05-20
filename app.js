@@ -1155,6 +1155,7 @@ function readImageFile(file) {
 }
 
 function scopedSchools() {
+  // Mantido para compatibilidade com funções que ainda usam base.json
   if (state.user?.perfil === "admin") return state.base.schools;
   return state.base.schools.filter((s) => s.gre === state.user.gre);
 }
@@ -1165,23 +1166,35 @@ function getFormation() {
 
 function getFormationRows(formation = getFormation()) {
   if (!formation) return [];
-  const byInep = new Map((formation.rows || []).map((r) => [String(r.inep), r]));
   const recursoMap = formation.recursoMap || new Map();
-  return scopedSchools().map((school) => {
-    const imported = byInep.get(String(school.inep));
-    const rec = recursoMap.get(String(school.inep)) || {};
+  const isAdmin = state.user?.perfil === "admin";
+  const userGre = state.user?.gre;
+
+  // Usa os dados importados como fonte primária — não filtra pelo base.json
+  // Isso garante que todos os INEPs da planilha aparecem, independente do base.json
+  let rows = (formation.rows || []).map((row) => {
+    const rec = recursoMap.get(String(row.inep)) || {};
     return {
-      ...school,
-      inscrito: Boolean(imported?.inscrito),
-      credenciado: Boolean(imported?.credenciado),
-      representantes: imported?.representantes || [],
-      duplicado: (imported?.representantes || []).length > 1,
+      gre: row.gre || "",
+      inep: String(row.inep),
+      escola: row.escola || "",
+      inscrito: Boolean(row.inscrito),
+      credenciado: Boolean(row.credenciado),
+      representantes: row.representantes || [],
+      duplicado: (row.representantes || []).length > 1,
       recurso_inscricao: rec.recurso_inscricao || "",
       resultado_inscricao: rec.resultado_inscricao || "",
       recurso_credenciamento: rec.recurso_credenciamento || "",
       resultado_credenciamento: rec.resultado_credenciamento || "",
     };
   });
+
+  // Gerente vê apenas sua GRE
+  if (!isAdmin && userGre) {
+    rows = rows.filter((r) => r.gre === userGre);
+  }
+
+  return rows;
 }
 
 function summarizeFormation(formation) {
