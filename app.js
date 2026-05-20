@@ -1512,6 +1512,8 @@ function filteredRows(rows) {
 
 function getFilteredExportRows() { return filteredRows(getFormationRows()); }
 
+let _autoSaveTimer = null;
+
 function updateSchoolField(inep, field, value) {
   const formation = getFormation();
   if (!formation) return;
@@ -1523,10 +1525,12 @@ function updateSchoolField(inep, field, value) {
   rec.formacao_id = formation.id;
   rec.inep = inep;
   formation.recursoMap.set(inep, rec);
-  if (!state.dirtyRecursos) state.dirtyRecursos = new Set();
   state.dirtyRecursos.add(inep);
   state.unsavedChanges = true;
   renderFormationDetail();
+  // Auto-save após 1 segundo sem novas alterações
+  clearTimeout(_autoSaveTimer);
+  _autoSaveTimer = setTimeout(() => saveFormationChanges(), 1000);
 }
 
 async function reloadRecursoMap() {
@@ -1549,19 +1553,24 @@ async function reloadRecursoMap() {
 
 async function saveFormationChanges() {
   const formation = getFormation();
-  if (!formation) return;
+  if (!formation || !state.unsavedChanges) return;
   const btn = $("#saveChangesBtn");
   if (btn) { btn.disabled = true; btn.textContent = "Salvando..."; }
   try {
-    const dirty = state.dirtyRecursos || new Set();
+    const dirty = state.dirtyRecursos;
     const recursoMap = formation.recursoMap || new Map();
+    if (!dirty.size) {
+      state.unsavedChanges = false;
+      if (btn) btn.classList.add("hidden");
+      return;
+    }
     const records = [...dirty]
       .filter((inep) => recursoMap.has(inep))
       .map((inep) => {
         const r = recursoMap.get(inep);
         return {
           formacao_id: formation.id,
-          inep,
+          inep: String(inep),
           recurso_inscricao: r.recurso_inscricao || "",
           resultado_inscricao: r.resultado_inscricao || "",
           recurso_credenciamento: r.recurso_credenciamento || "",
@@ -1569,16 +1578,28 @@ async function saveFormationChanges() {
           updated_at: new Date().toISOString(),
         };
       });
-    if (records.length && db) {
-      const { error } = await db.from("escola_recurso").upsert(records, { onConflict: "formacao_id,inep" });
-      if (error) throw error;
+    if (!records.length) {
+      state.unsavedChanges = false;
+      if (btn) btn.classList.add("hidden");
+      return;
     }
+    if (!db) throw new Error("Sem conexão com o banco de dados.");
+    const { error } = await db.from("escola_recurso").upsert(records, { onConflict: "formacao_id,inep" });
+    if (error) throw error;
+    // Confirma que salvou
+    const { data: check, error: checkErr } = await db
+      .from("escola_recurso")
+      .select("inep")
+      .eq("formacao_id", formation.id)
+      .in("inep", records.map((r) => r.inep));
+    if (checkErr || !check?.length) throw new Error("Dado não confirmado no banco após salvar.");
     state.dirtyRecursos = new Set();
     state.unsavedChanges = false;
     if (btn) btn.classList.add("hidden");
-    notify("Alterações salvas", `${records.length} escola(s) gravadas. O outro perfil verá ao clicar em "Atualizar recursos".`);
+    notify("Salvo no banco ✓", `${records.length} escola(s) gravadas com sucesso.`);
     renderFormationDetail();
   } catch (err) {
+    console.error("Erro ao salvar recurso:", err);
     notify("Erro ao salvar", err.message || "Verifique a conexão com o banco.", "error");
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = "Salvar alterações"; }
