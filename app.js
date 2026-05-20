@@ -559,7 +559,7 @@ function handleLogin(event) {
 }
 
 function logout() {
-  stopAutoSync();
+  clearTimeout(_autoSaveTimer);
   state.user = null;
   localStorage.removeItem(SESSION_KEY);
   state.formationMode = "home";
