@@ -13,9 +13,15 @@ create table if not exists public.formacoes (
   foto_url text not null default '',
   data_evento date,
   prazo_inscricoes date,
+  prazo_recurso_inscricao date,
+  prazo_recurso_credenciamento date,
   prazo_recurso date,
   created_at timestamptz not null default now()
 );
+
+alter table public.formacoes
+  add column if not exists prazo_recurso_inscricao date,
+  add column if not exists prazo_recurso_credenciamento date;
 
 create table if not exists public.recursos (
   id uuid primary key default gen_random_uuid(),
@@ -53,9 +59,37 @@ create table if not exists public.formacao_dados (
   imported_at timestamptz not null default now()
 );
 
+create index if not exists formacao_dados_formacao_id_idx
+  on public.formacao_dados (formacao_id);
+
+create table if not exists public.escola_recurso (
+  id uuid primary key default gen_random_uuid(),
+  formacao_id uuid not null references public.formacoes(id) on delete cascade,
+  inep text not null default '',
+  recurso_inscricao text not null default '',
+  resultado_inscricao text not null default '',
+  recurso_credenciamento text not null default '',
+  resultado_credenciamento text not null default '',
+  updated_at timestamptz not null default now()
+);
+
+alter table public.escola_recurso
+  add column if not exists id uuid default gen_random_uuid(),
+  add column if not exists formacao_id uuid references public.formacoes(id) on delete cascade,
+  add column if not exists inep text not null default '',
+  add column if not exists recurso_inscricao text not null default '',
+  add column if not exists resultado_inscricao text not null default '',
+  add column if not exists recurso_credenciamento text not null default '',
+  add column if not exists resultado_credenciamento text not null default '',
+  add column if not exists updated_at timestamptz not null default now();
+
+create unique index if not exists escola_recurso_formacao_inep_key
+  on public.escola_recurso (formacao_id, inep);
+
 alter table public.formacoes enable row level security;
 alter table public.usuarios enable row level security;
 alter table public.formacao_dados enable row level security;
+alter table public.escola_recurso enable row level security;
 
 drop policy if exists "Ler formacoes publicamente" on public.formacoes;
 drop policy if exists "Inserir formacoes publicamente" on public.formacoes;
@@ -86,6 +120,16 @@ create policy "Ler dados publicamente" on public.formacao_dados for select using
 create policy "Inserir dados publicamente" on public.formacao_dados for insert with check (true);
 create policy "Atualizar dados publicamente" on public.formacao_dados for update using (true) with check (true);
 create policy "Excluir dados publicamente" on public.formacao_dados for delete using (true);
+
+drop policy if exists "Ler recursos escola publicamente" on public.escola_recurso;
+drop policy if exists "Inserir recursos escola publicamente" on public.escola_recurso;
+drop policy if exists "Atualizar recursos escola publicamente" on public.escola_recurso;
+drop policy if exists "Excluir recursos escola publicamente" on public.escola_recurso;
+
+create policy "Ler recursos escola publicamente" on public.escola_recurso for select using (true);
+create policy "Inserir recursos escola publicamente" on public.escola_recurso for insert with check (true);
+create policy "Atualizar recursos escola publicamente" on public.escola_recurso for update using (true) with check (true);
+create policy "Excluir recursos escola publicamente" on public.escola_recurso for delete using (true);
 
 alter table public.recursos enable row level security;
 

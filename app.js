@@ -23,6 +23,7 @@ const SUPABASE_URL = "https://intswvnfmizbttlrqhdt.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_XwPyaNxJ1BFTplBsTRmOLQ_wBOp1OUm";
 const db = window.supabase?.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) || null;
 const SESSION_KEY = "monitor-current-user";
+const DB_PAGE_SIZE = 1000;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
@@ -149,6 +150,53 @@ function saveStored(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
+async function selectAllDbRows(table, columns = "*", configure = (query) => query) {
+  if (!db) return [];
+  const allRows = [];
+  let from = 0;
+
+  while (true) {
+    const query = configure(db.from(table).select(columns));
+    const { data, error } = await query.range(from, from + DB_PAGE_SIZE - 1);
+    if (error) throw error;
+
+    const page = data || [];
+    allRows.push(...page);
+    if (page.length < DB_PAGE_SIZE) break;
+    from += DB_PAGE_SIZE;
+  }
+
+  return allRows;
+}
+
+async function deleteDbRowsById(table, ids, chunkSize = 200) {
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    const { error } = await db.from(table).delete().in("id", ids.slice(i, i + chunkSize));
+    if (error) throw error;
+  }
+}
+
+async function insertDbRows(table, rows, chunkSize = 500) {
+  const insertedIds = [];
+  try {
+    for (let i = 0; i < rows.length; i += chunkSize) {
+      const { data, error } = await db.from(table).insert(rows.slice(i, i + chunkSize)).select("id");
+      if (error) throw error;
+      insertedIds.push(...(data || []).map((r) => r.id).filter(Boolean));
+    }
+  } catch (error) {
+    if (insertedIds.length) {
+      try {
+        await deleteDbRowsById(table, insertedIds);
+      } catch (cleanupError) {
+        console.warn("Não foi possível desfazer a importação parcial.", cleanupError);
+      }
+    }
+    throw error;
+  }
+  return insertedIds;
+}
+
 async function loadUsers() {
   const localUsers = normalizeUsers(loadStored("monitor-users", state.base.users));
   if (!db) return localUsers;
@@ -241,21 +289,25 @@ async function loadFormations() {
 
     // Supabase tem formações → é a única fonte de verdade, ignora localStorage
     const formations = formacoes.map(fromDbFormation);
+    const formationIds = formations.map((f) => f.id);
 
-    const { data: importedRows, error: rowsError } = await db.from("formacao_dados").select("*");
-    if (rowsError) throw rowsError;
+    const importedRows = await selectAllDbRows("formacao_dados", "*", (query) =>
+      query.in("formacao_id", formationIds).order("id", { ascending: true }),
+    );
+    const rowsByFormation = groupDbRows(importedRows);
 
-    const rowsByFormation = groupDbRows(importedRows || []);
-
-    const { data: recursoRows, error: recursoError } = await db.from("escola_recurso").select("*");
-    if (recursoError) {
+    let recursoRows = [];
+    try {
+      recursoRows = await selectAllDbRows("escola_recurso", "*", (query) =>
+        query.in("formacao_id", formationIds).order("id", { ascending: true }),
+      );
+      state.recursoTableMissing = false;
+    } catch (recursoError) {
       console.warn("Tabela escola_recurso indisponível:", recursoError.message);
       state.recursoTableMissing = true;
-    } else {
-      state.recursoTableMissing = false;
     }
     const recursoByFormation = new Map();
-    (recursoRows || []).forEach((r) => {
+    recursoRows.forEach((r) => {
       if (!recursoByFormation.has(r.formacao_id)) recursoByFormation.set(r.formacao_id, new Map());
       recursoByFormation.get(r.formacao_id).set(r.inep, r);
     });
@@ -364,8 +416,10 @@ async function persistFormation(formation) {
 }
 
 async function persistFormationRows(formation) {
-  saveStored("monitor-formations", state.formations);
-  if (!db) return;
+  if (!db) {
+    saveStored("monitor-formations", state.formations);
+    return false;
+  }
 
   const schoolByInep = new Map(state.base.schools.map((s) => [String(s.inep), s]));
   const rows = (formation.rows || []).flatMap((row) => {
@@ -387,23 +441,30 @@ async function persistFormationRows(formation) {
   if (!rows.length) return;
 
   // Lê IDs antigos ANTES de inserir — se insert falhar, dados antigos ficam intactos
-  const { data: existing } = await db
-    .from("formacao_dados")
-    .select("id")
-    .eq("formacao_id", formation.id);
-  const oldIds = (existing || []).map((r) => r.id);
+  const existing = await selectAllDbRows("formacao_dados", "id", (query) =>
+    query.eq("formacao_id", formation.id).order("id", { ascending: true }),
+  );
+  const oldIds = existing.map((r) => r.id).filter(Boolean);
 
   // Insere novos dados
-  const { error: insertError } = await db.from("formacao_dados").insert(rows);
-  if (insertError) throw insertError; // falhou: dados antigos preservados, nada deletado
+  await insertDbRows("formacao_dados", rows);
 
   // Só deleta os antigos APÓS insert confirmado
   if (oldIds.length) {
-    const chunkSize = 200;
-    for (let i = 0; i < oldIds.length; i += chunkSize) {
-      await db.from("formacao_dados").delete().in("id", oldIds.slice(i, i + chunkSize));
-    }
+    await deleteDbRowsById("formacao_dados", oldIds);
   }
+
+  const savedRows = await selectAllDbRows("formacao_dados", "*", (query) =>
+    query.eq("formacao_id", formation.id).order("id", { ascending: true }),
+  );
+  if (savedRows.length < rows.length) {
+    throw new Error("Importação não confirmada no Supabase. Tente novamente e verifique as políticas RLS.");
+  }
+
+  const rowsByFormation = groupDbRows(savedRows);
+  formation.rows = rowsByFormation.get(formation.id) || [];
+  saveStored("monitor-formations", state.formations);
+  return true;
 }
 
 async function deleteFormationFromDb(id) {
@@ -1570,8 +1631,9 @@ async function reloadRecursoMap() {
   const btn = $("#reloadRecursoBtn");
   if (btn) { btn.disabled = true; btn.textContent = "Atualizando..."; }
   try {
-    const { data, error } = await db.from("escola_recurso").select("*").eq("formacao_id", formation.id);
-    if (error) throw error;
+    const data = await selectAllDbRows("escola_recurso", "*", (query) =>
+      query.eq("formacao_id", formation.id).order("id", { ascending: true }),
+    );
     formation.recursoMap = new Map((data || []).map((r) => [r.inep, r]));
     renderFormationDetail();
     notify("Dados atualizados", "Recursos e resultados recarregados do banco.");
@@ -1891,6 +1953,7 @@ async function importCsvFile(file) {
   await withButtonBusy($("#importCsvBtn"), "Importando...", async () => {
     const formation = getFormation();
     if (!formation) return;
+    const previousRows = formation.rows || [];
     try {
       let rows2D;
       if (/\.xlsx?$/i.test(file.name)) {
@@ -1904,11 +1967,19 @@ async function importCsvFile(file) {
       const rows = parseFormationRows(rows2D);
       if (!rows.length) throw new Error("Nenhum INEP encontrado. Verifique se o arquivo tem as colunas GRE, INEP, ESCOLA, INSCRITO, CREDENCIADO.");
       formation.rows = rows;
-      await persistFormationRows(formation);
-      notify("Importação concluída", `${rows.length} escolas salvas no banco de dados.`);
+      const savedToDb = await persistFormationRows(formation);
+      notify(
+        savedToDb ? "Importação concluída" : "Importação salva localmente",
+        savedToDb ? `${formation.rows.length} escolas salvas no banco de dados.` : `${formation.rows.length} escolas salvas apenas neste navegador.`,
+        savedToDb ? "success" : "warning",
+      );
       renderFormationCards();
       renderFormationDetail();
     } catch (err) {
+      formation.rows = previousRows;
+      saveStored("monitor-formations", state.formations);
+      renderFormationCards();
+      renderFormationDetail();
       notify("Erro na importação", err.message || "Verifique o formato do arquivo.", "error");
     }
   });
