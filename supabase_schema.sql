@@ -13,7 +13,21 @@ create table if not exists public.formacoes (
   foto_url text not null default '',
   data_evento date,
   prazo_inscricoes date,
+  prazo_recurso date,
   created_at timestamptz not null default now()
+);
+
+create table if not exists public.recursos (
+  id uuid primary key default gen_random_uuid(),
+  formacao_id uuid not null references public.formacoes(id) on delete cascade,
+  gre text not null default '',
+  tipo text not null default 'inscricao',
+  justificativa text not null default '',
+  escolas jsonb not null default '[]',
+  status text not null default 'pendente',
+  observacao text not null default '',
+  criado_em timestamptz not null default now(),
+  decidido_em timestamptz
 );
 
 create table if not exists public.usuarios (
@@ -72,3 +86,15 @@ create policy "Ler dados publicamente" on public.formacao_dados for select using
 create policy "Inserir dados publicamente" on public.formacao_dados for insert with check (true);
 create policy "Atualizar dados publicamente" on public.formacao_dados for update using (true) with check (true);
 create policy "Excluir dados publicamente" on public.formacao_dados for delete using (true);
+
+alter table public.recursos enable row level security;
+
+drop policy if exists "Ler recursos publicamente" on public.recursos;
+drop policy if exists "Inserir recursos publicamente" on public.recursos;
+drop policy if exists "Atualizar recursos publicamente" on public.recursos;
+drop policy if exists "Excluir recursos publicamente" on public.recursos;
+
+create policy "Ler recursos publicamente" on public.recursos for select using (true);
+create policy "Inserir recursos publicamente" on public.recursos for insert with check (true);
+create policy "Atualizar recursos publicamente" on public.recursos for update using (true) with check (true);
+create policy "Excluir recursos publicamente" on public.recursos for delete using (true);

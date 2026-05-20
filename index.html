@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=7" />
+    <link rel="stylesheet" href="styles.css?v=19" />
   </head>
   <body>
     <main id="app" class="app-shell">
@@ -250,10 +250,6 @@
                     Quantitativo esperado
                     <input name="esperado" type="number" min="1" value="599" required />
                   </label>
-                  <label>
-                    URL da planilha online
-                    <input name="sheetUrl" placeholder="Link publicado ou de compartilhamento do Google Sheets" />
-                  </label>
                 </div>
                 <div class="form-row">
                   <label>
@@ -263,6 +259,14 @@
                   <label>
                     Prazo para fim das inscrições
                     <input name="prazoInscricoes" type="date" />
+                  </label>
+                  <label>
+                    Prazo recurso — Inscrição
+                    <input name="prazoRecursoInscricao" type="date" />
+                  </label>
+                  <label>
+                    Prazo recurso — Credenciamento
+                    <input name="prazoRecursoCredenciamento" type="date" />
                   </label>
                 </div>
                 <label>
@@ -286,19 +290,15 @@
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
                       Voltar para formações
                     </button>
-                    <button class="secondary admin-only" id="editFormationUrl">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                      Adicionar URL
+                    <button class="secondary admin-only" id="importCsvBtn">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                      Importar planilha
                     </button>
-                    <button class="secondary admin-only" id="syncFormation">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
-                      Atualizar agora
-                    </button>
+                    <input type="file" id="importCsvInput" accept=".xlsx,.xls,.csv,.tsv,.txt" style="display:none" />
                   </div>
                 </div>
                 <div class="detail-title">
                   <h3 id="formationName">Formação</h3>
-                  <p class="hint admin-only" id="formationSyncStatus"></p>
                 </div>
 
                 <div class="metrics-grid" id="formationMetrics"></div>
@@ -362,14 +362,37 @@
                       <input class="search" id="schoolSearch" placeholder="Buscar por escola, INEP ou GRE..." />
                     </div>
                     <select id="statusFilter">
-                      <option value="todos">Todas as escolas</option>
+                      <option value="todos">Situação: Todas</option>
                       <option value="inscritas">Inscritas</option>
                       <option value="nao-inscritas">Não inscritas</option>
                       <option value="credenciadas">Credenciadas</option>
                       <option value="nao-credenciadas">Não credenciadas</option>
                     </select>
+                    <select id="recursoFilter">
+                      <option value="todos">Recurso: Todos</option>
+                      <option value="com-recurso">Com recurso</option>
+                      <option value="sem-recurso">Sem recurso</option>
+                      <option value="inscricao">Recurso: Inscrição</option>
+                      <option value="credenciamento">Recurso: Credenciamento</option>
+                    </select>
+                    <select id="resultadoFilter">
+                      <option value="todos">Resultado: Todos</option>
+                      <option value="pendente">Pendente</option>
+                      <option value="deferido">Deferido</option>
+                      <option value="indeferido">Indeferido</option>
+                    </select>
                   </div>
                 </article>
+
+                <div class="db-warning hidden" id="dbWarning"></div>
+
+                <div class="save-bar hidden" id="saveBar">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  <span>Há alterações não salvas</span>
+                  <button id="saveChangesBtn" type="button">Salvar alterações</button>
+                </div>
+
+                <div class="prazo-recurso-row hidden" id="prazoRecursoRow"></div>
 
                 <article class="panel">
                   <div class="panel-head">
@@ -378,9 +401,13 @@
                       <h3>Acompanhamento detalhado</h3>
                     </div>
                     <div class="export-actions">
+                      <button class="save-inline-btn hidden" id="saveChangesBtn" type="button">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                        Salvar alterações
+                      </button>
                       <button class="secondary" id="downloadSpreadsheet" type="button">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-                        Planilha CSV
+                        Exportar XLSX
                       </button>
                       <button class="secondary" id="downloadPdf" type="button">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
@@ -392,17 +419,29 @@
                     <table>
                       <thead>
                         <tr>
+                          <th class="th-check"><input type="checkbox" id="selectAllCheck" title="Selecionar todos" /></th>
                           <th>GRE</th>
                           <th>INEP</th>
                           <th>Escola</th>
                           <th>Inscrito</th>
                           <th>Credenciado</th>
+                          <th>Rec. Inscrição</th>
+                          <th>Resultado</th>
+                          <th>Rec. Credenciamento</th>
+                          <th>Resultado</th>
                           <th>Representante</th>
                           <th></th>
                         </tr>
                       </thead>
                       <tbody id="schoolsTable"></tbody>
                     </table>
+                  </div>
+                  <div class="selection-bar hidden" id="selectionBar">
+                    <span id="selectionCount">0 escolas selecionadas</span>
+                    <button class="mini-button regional-only" id="bulkRecursoInsc" type="button">Recurso Inscrição</button>
+                    <button class="mini-button regional-only" id="bulkRecursoCred" type="button">Recurso Credenciamento</button>
+                    <button class="mini-button" id="bulkClearRecurso" type="button">Limpar recurso</button>
+                    <button class="secondary" id="clearSelection" type="button">Cancelar seleção</button>
                   </div>
                 </article>
               </section>
@@ -541,29 +580,6 @@
         </div>
       </dialog>
 
-      <dialog class="school-dialog" id="sheetUrlDialog">
-        <form id="sheetUrlForm" method="dialog">
-          <div class="dialog-head">
-            <div>
-              <p class="eyebrow">Planilha online</p>
-              <h3>Adicionar ou alterar URL</h3>
-            </div>
-            <button class="icon-button" id="closeSheetUrlDialog" type="button" aria-label="Fechar">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
-            </button>
-          </div>
-          <label class="url-field">
-            URL da planilha online
-            <input name="sheetUrl" id="sheetUrlInput" placeholder="Cole o link publicado ou o link de compartilhamento do Google Sheets" />
-          </label>
-          <p class="hint" style="margin-top:10px">Use <strong>Arquivo &gt; Compartilhar &gt; Publicar na web</strong> no Google Sheets. O painel atualiza automaticamente a cada 2 minutos.</p>
-          <div class="dialog-actions">
-            <button class="secondary danger-button" id="clearSheetUrl" type="button">Remover URL</button>
-            <button class="secondary" type="submit">Salvar URL</button>
-          </div>
-        </form>
-      </dialog>
-
       <dialog class="school-dialog confirm-dialog" id="deleteFormationDialog">
         <div class="dialog-head">
           <div>
@@ -633,6 +649,7 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <script src="app.js?v=13"></script>
   </body>
 </html>

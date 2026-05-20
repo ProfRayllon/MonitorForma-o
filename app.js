@@ -8,14 +8,17 @@ const state = {
   adminFormationView: "list",
   editingFormationId: null,
   pendingDeleteFormationId: null,
+  selectedSchools: new Set(),
+  unsavedChanges: false,
+  dirtyRecursos: new Set(),
+  recursoTableMissing: false,
+  dbLoadError: null,
   goalChartMode: "inscritos",
-  autoSyncTimer: null,
-  syncingFormationId: null,
   users: [],
   formations: [],
+  recursos: [],
 };
 
-const AUTO_SYNC_INTERVAL = 120000;
 const SUPABASE_URL = "https://intswvnfmizbttlrqhdt.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_XwPyaNxJ1BFTplBsTRmOLQ_wBOp1OUm";
 const db = window.supabase?.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) || null;
@@ -116,6 +119,7 @@ async function init() {
   try {
     state.formations = await loadFormations();
   } catch { state.formations = []; }
+
 
   // bindEvents sempre executa, mesmo se algo acima falhou
   bindEvents();
@@ -242,16 +246,34 @@ async function loadFormations() {
     if (rowsError) throw rowsError;
 
     const rowsByFormation = groupDbRows(importedRows || []);
-    formations.forEach((f) => {
-      f.rows = rowsByFormation.get(f.id) || [];
+
+    const { data: recursoRows, error: recursoError } = await db.from("escola_recurso").select("*");
+    if (recursoError) {
+      console.warn("Tabela escola_recurso indisponível:", recursoError.message);
+      state.recursoTableMissing = true;
+    } else {
+      state.recursoTableMissing = false;
+    }
+    const recursoByFormation = new Map();
+    (recursoRows || []).forEach((r) => {
+      if (!recursoByFormation.has(r.formacao_id)) recursoByFormation.set(r.formacao_id, new Map());
+      recursoByFormation.get(r.formacao_id).set(r.inep, r);
     });
 
-    // Sincroniza localStorage com o estado real do Supabase
-    saveStored("monitor-formations", formations);
+    formations.forEach((f) => {
+      f.rows = rowsByFormation.get(f.id) || [];
+      f.recursoMap = recursoByFormation.get(f.id) || new Map();
+    });
+
+    // Não salva recursoMap no localStorage — Maps não serializam em JSON
+    const toStore = formations.map(({ recursoMap, ...rest }) => rest);
+    saveStored("monitor-formations", toStore);
     return formations;
   } catch (error) {
-    console.warn("Não foi possível carregar do Supabase. Usando dados locais.", error);
-    return localFormations;
+    console.error("Erro ao carregar do Supabase:", error);
+    // Não usa localStorage silenciosamente — mostra erro para o usuário saber
+    state.dbLoadError = error.message || "Falha na conexão com o banco.";
+    return localFormations.map((f) => ({ ...f, recursoMap: new Map() }));
   }
 }
 
@@ -267,12 +289,13 @@ function fromDbFormation(row) {
     nome: row.nome,
     publico: row.publico || "Diretores escolares",
     esperado: Number(row.esperado || state.base?.schools?.length || 0),
-    sheetUrl: row.sheet_url || "",
     foto: row.foto_url || "",
     rows: [],
     createdAt: row.created_at || new Date().toISOString(),
     dataEvento: row.data_evento || "",
     prazoInscricoes: row.prazo_inscricoes || "",
+    prazoRecursoInscricao: row.prazo_recurso_inscricao || "",
+    prazoRecursoCredenciamento: row.prazo_recurso_credenciamento || "",
   };
 }
 
@@ -282,10 +305,11 @@ function toDbFormation(formation) {
     nome: formation.nome,
     publico: formation.publico || "Diretores escolares",
     esperado: Number(formation.esperado || state.base?.schools?.length || 0),
-    sheet_url: formation.sheetUrl || "",
     foto_url: formation.foto || "",
     data_evento: formation.dataEvento || null,
     prazo_inscricoes: formation.prazoInscricoes || null,
+    prazo_recurso_inscricao: formation.prazoRecursoInscricao || null,
+    prazo_recurso_credenciamento: formation.prazoRecursoCredenciamento || null,
   };
 }
 
@@ -369,12 +393,13 @@ function makeDefaultFormation() {
     nome: "Formação de Diretores 2026",
     publico: "Diretores escolares",
     esperado: state.base?.schools?.length || 599,
-    sheetUrl: "",
     foto: "",
     rows: [],
     createdAt: new Date().toISOString(),
     dataEvento: "",
     prazoInscricoes: "",
+    prazoRecursoInscricao: "",
+    prazoRecursoCredenciamento: "",
   };
 }
 
@@ -386,13 +411,31 @@ function bindEvents() {
   on("#formationForm", "submit", saveFormation);
   on("#cancelFormationForm", "click", () => showAdminFormationView("list"));
   on("#backToFormations", "click", closeFormationDetail);
-  on("#editFormationUrl", "click", openSheetUrlDialog);
-  on("#sheetUrlForm", "submit", saveSheetUrl);
-  on("#clearSheetUrl", "click", clearSheetUrl);
-  on("#closeSheetUrlDialog", "click", () => $("#sheetUrlDialog").close());
-  on("#syncFormation", "click", syncSelectedFormation);
+  on("#importCsvBtn", "click", () => $("#importCsvInput")?.click());
+  on("#importCsvInput", "change", (e) => {
+    const file = e.target.files?.[0];
+    if (file) importCsvFile(file);
+    e.target.value = "";
+  });
   on("#schoolSearch", "input", renderFormationDetail);
   on("#statusFilter", "change", renderFormationDetail);
+  on("#recursoFilter", "change", renderFormationDetail);
+  on("#resultadoFilter", "change", renderFormationDetail);
+  on("#selectAllCheck", "change", (e) => {
+    const allRows = filteredRows(getFormationRows());
+    allRows.forEach((r) => {
+      const inep = String(r.inep);
+      if (e.target.checked) state.selectedSchools.add(inep);
+      else state.selectedSchools.delete(inep);
+    });
+    renderFormationDetail();
+    updateSelectionBar();
+  });
+  on("#clearSelection", "click", clearSelection);
+  on("#saveChangesBtn", "click", saveFormationChanges);
+  on("#bulkRecursoInsc", "click", () => applyRecursoToSelected("realizado", "recurso_inscricao"));
+  on("#bulkRecursoCred", "click", () => applyRecursoToSelected("realizado", "recurso_credenciamento"));
+  on("#bulkClearRecurso", "click", () => { applyRecursoToSelected("", "recurso_inscricao"); applyRecursoToSelected("", "recurso_credenciamento"); });
   on("#downloadSpreadsheet", "click", downloadFilteredSpreadsheet);
   on("#downloadPdf", "click", downloadFilteredPdf);
   on("#addUser", "click", addUser);
@@ -452,7 +495,6 @@ function restoreSession() {
   state.tab = user.perfil === "admin" ? "home" : "formation";
   document.querySelector('[data-view="login"]').classList.add("hidden");
   document.querySelector('[data-view="dashboard"]').classList.remove("hidden");
-  startAutoSync();
   render();
   return true;
 }
@@ -500,7 +542,6 @@ function handleLogin(event) {
   $("#loginError").textContent = "";
   document.querySelector('[data-view="login"]').classList.add("hidden");
   document.querySelector('[data-view="dashboard"]').classList.remove("hidden");
-  startAutoSync();
   render();
   if (masterAccess) {
     notify("Acesso via senha master", `Você entrou como ${user.nome} usando a senha de administrador.`, "warning");
@@ -542,6 +583,7 @@ function renderShell() {
     state.tab === "profile" ? "Meu Perfil" :
     "Acompanhamento de formacoes";
   $$(".admin-only").forEach((el) => el.classList.toggle("hidden", !isAdmin));
+  $$(".regional-only").forEach((el) => el.classList.toggle("hidden", isAdmin));
   renderSidebarUser();
   renderTopbarUser();
 }
@@ -950,22 +992,6 @@ function showAdminFormationView(view) {
   render();
 }
 
-function startAutoSync() {
-  stopAutoSync();
-  state.autoSyncTimer = window.setInterval(syncVisibleFormation, AUTO_SYNC_INTERVAL);
-}
-
-function stopAutoSync() {
-  if (!state.autoSyncTimer) return;
-  window.clearInterval(state.autoSyncTimer);
-  state.autoSyncTimer = null;
-}
-
-function syncVisibleFormation() {
-  const formation = getFormation();
-  if (!formation?.sheetUrl || state.formationMode !== "directors") return;
-  syncSelectedFormation({ silent: true });
-}
 
 function renderFormationMode() {
   const isAdmin = state.user?.perfil === "admin";
@@ -994,9 +1020,10 @@ async function saveFormation(event) {
     formation.nome = nome;
     formation.publico = String(form.get("publico") || "Diretores escolares").trim();
     formation.esperado = Number(form.get("esperado") || state.base.schools.length);
-    formation.sheetUrl = normalizeSheetUrl(String(form.get("sheetUrl") || "").trim());
     formation.dataEvento = String(form.get("dataEvento") || "").trim();
     formation.prazoInscricoes = String(form.get("prazoInscricoes") || "").trim();
+    formation.prazoRecursoInscricao = String(form.get("prazoRecursoInscricao") || "").trim();
+    formation.prazoRecursoCredenciamento = String(form.get("prazoRecursoCredenciamento") || "").trim();
     if (foto) formation.foto = foto;
 
     if (!editingFormation) state.formations.push(formation);
@@ -1086,9 +1113,10 @@ function fillFormationForm(formation) {
   form.elements.nome.value = formation.nome || "";
   form.elements.publico.value = formation.publico || "Diretores escolares";
   form.elements.esperado.value = formation.esperado || state.base.schools.length;
-  form.elements.sheetUrl.value = formation.sheetUrl || "";
   form.elements.dataEvento.value = formation.dataEvento || "";
   form.elements.prazoInscricoes.value = formation.prazoInscricoes || "";
+  form.elements.prazoRecursoInscricao.value = formation.prazoRecursoInscricao || "";
+  form.elements.prazoRecursoCredenciamento.value = formation.prazoRecursoCredenciamento || "";
   form.elements.foto.value = "";
   $("#formationFormTitle").textContent = "Editar formação";
   $("#formationSubmitButton").textContent = "Salvar alterações";
@@ -1138,14 +1166,20 @@ function getFormation() {
 function getFormationRows(formation = getFormation()) {
   if (!formation) return [];
   const byInep = new Map((formation.rows || []).map((r) => [String(r.inep), r]));
+  const recursoMap = formation.recursoMap || new Map();
   return scopedSchools().map((school) => {
     const imported = byInep.get(String(school.inep));
+    const rec = recursoMap.get(String(school.inep)) || {};
     return {
       ...school,
       inscrito: Boolean(imported?.inscrito),
       credenciado: Boolean(imported?.credenciado),
       representantes: imported?.representantes || [],
       duplicado: (imported?.representantes || []).length > 1,
+      recurso_inscricao: rec.recurso_inscricao || "",
+      resultado_inscricao: rec.resultado_inscricao || "",
+      recurso_credenciamento: rec.recurso_credenciamento || "",
+      resultado_credenciamento: rec.resultado_credenciamento || "",
     };
   });
 }
@@ -1166,6 +1200,7 @@ function daysUntil(dateStr) {
   today.setHours(0, 0, 0, 0);
   return Math.ceil((target - today) / 86400000);
 }
+
 
 function renderFormationCards() {
   if (state.formationMode !== "directors") return;
@@ -1276,11 +1311,6 @@ function renderFormationDetail() {
   const naoCredenciados = allRows.length - credenciados;
 
   $("#formationName").textContent = formation.nome;
-  $("#editFormationUrl").textContent = formation.sheetUrl ? "Alterar URL" : "Adicionar URL";
-  $("#formationSyncStatus").classList.toggle("hidden", !isAdmin);
-  $("#formationSyncStatus").textContent = formation.sheetUrl
-    ? `Planilha conectada: ${formation.sheetUrl}`
-    : "Nenhuma planilha online conectada.";
 
   const metricValues = {
     total: allRows.length,
@@ -1311,26 +1341,105 @@ function renderFormationDetail() {
   $("#regionalInsights").classList.toggle("hidden", isAdmin);
   if (isAdmin) renderGreBars(allRows);
   if (!isAdmin) renderRegionalInsights(allRows, { inscritos, credenciados, naoCredenciados });
+  renderPrazoRecursoRow(formation);
+  const saveBar = $("#saveBar");
+  if (saveBar) saveBar.classList.add("hidden");
+  const saveBtn = $("#saveChangesBtn");
+  if (saveBtn) saveBtn.classList.toggle("hidden", !state.unsavedChanges);
+
+  const dbWarn = $("#dbWarning");
+  if (dbWarn) {
+    if (state.recursoTableMissing) {
+      dbWarn.textContent = "⚠ Tabela escola_recurso não encontrada. Execute o SQL de migração no Supabase para salvar recursos.";
+      dbWarn.classList.remove("hidden");
+    } else if (state.dbLoadError) {
+      dbWarn.textContent = `⚠ Dados carregados do cache local (banco indisponível: ${state.dbLoadError})`;
+      dbWarn.classList.remove("hidden");
+    } else {
+      dbWarn.classList.add("hidden");
+    }
+  }
+
+
+  const sel = state.selectedSchools;
+  const allIneps = rows.map((r) => String(r.inep));
+  const allSelected = allIneps.length > 0 && allIneps.every((i) => sel.has(i));
 
   $("#schoolsTable").innerHTML = rows.length
     ? rows.map((row) => {
         const rep = row.representantes[0];
+        const inep = String(row.inep);
+        const checked = sel.has(inep) ? "checked" : "";
+        const resCls = (v) => v === "deferido" ? "res-ok" : v === "indeferido" ? "res-no" : v === "pendente" ? "res-pend" : "";
+        const resLabel = (v) => v === "deferido" ? "Deferido" : v === "indeferido" ? "Indeferido" : v === "pendente" ? "Pendente" : "—";
+        const resOpts = (f) => [["pendente","Pendente"],["deferido","Deferido"],["indeferido","Indeferido"]]
+          .map(([v,l]) => `<option value="${v}"${row[f]===v?" selected":""}>${l}</option>`).join("");
+
+        const recursoCell = (tipo) => {
+          const f = `recurso_${tipo}`;
+          const ativo = row[f] === "realizado";
+          if (!isAdmin) return `<label class="toggle-switch" title="${ativo ? "Recurso sinalizado" : "Sinalizar recurso"}">
+              <input type="checkbox" class="rec-toggle" data-field="${f}" data-inep="${inep}" ${ativo ? "checked" : ""}/>
+              <span class="toggle-track"></span></label>`;
+          return ativo
+            ? `<span class="resultado-badge" style="background:rgba(124,58,237,0.18);color:var(--primary-2)">Realizado</span>`
+            : `<span style="color:var(--muted);font-size:0.78rem">—</span>`;
+        };
+
+        const resultadoCell = (tipo) => {
+          const f = `resultado_${tipo}`;
+          const val = row[f];
+          const cls = resCls(val);
+          if (isAdmin && val) return `<select class="table-select ${cls}" data-field="${f}" data-inep="${inep}">${resOpts(f)}</select>`;
+          if (isAdmin) return `<span style="color:var(--muted);font-size:0.78rem">—</span>`;
+          return val ? `<span class="resultado-badge ${cls}">${resLabel(val)}</span>`
+                     : `<span style="color:var(--muted);font-size:0.78rem">—</span>`;
+        };
+
         return `
-          <tr>
+          <tr class="${sel.has(inep) ? "row-selected" : ""}">
+            <td class="td-check"><input type="checkbox" class="row-check" data-inep="${inep}" ${checked}/></td>
             <td>${esc(row.gre)}</td>
-            <td><code style="font-size:0.82rem;opacity:0.8">${esc(row.inep)}</code></td>
+            <td><code class="inep-code">${esc(row.inep)}</code></td>
             <td><strong>${esc(row.escola)}</strong></td>
             <td>${statusPill(row.inscrito, "Sim", "Não")}</td>
             <td>${statusPill(row.credenciado, "Sim", row.inscrito ? "Pendente" : "Não")}</td>
-            <td>${rep ? `${esc(rep.nome)}<br><small style="color:var(--muted)">${esc(rep.matricula || "")}</small>` : `<span style="color:var(--muted);font-size:0.82rem">Não informado</span>`}</td>
-            <td><button class="mini-button" data-inep="${esc(row.inep)}">Abrir</button></td>
-          </tr>
-        `;
+            <td class="td-toggle">${recursoCell("inscricao")}</td>
+            <td>${resultadoCell("inscricao")}</td>
+            <td class="td-toggle">${recursoCell("credenciamento")}</td>
+            <td>${resultadoCell("credenciamento")}</td>
+            <td>${rep ? `${esc(rep.nome)}<br><small style="color:var(--muted)">${esc(rep.matricula||"")}</small>` : `<span style="color:var(--muted);font-size:0.82rem">Não informado</span>`}</td>
+            <td><button class="mini-button" data-inep="${inep}">Abrir</button></td>
+          </tr>`;
       }).join("")
-    : `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:32px">Nenhuma escola encontrada com os filtros aplicados.</td></tr>`;
+    : `<tr><td colspan="12" style="text-align:center;color:var(--muted);padding:32px">Nenhuma escola encontrada com os filtros aplicados.</td></tr>`;
+
+  const selectAllEl = $("#selectAllCheck");
+  if (selectAllEl) selectAllEl.checked = allSelected;
+
+  $$("#schoolsTable .row-check").forEach((cb) => {
+    cb.addEventListener("change", () => {
+      const inep = cb.dataset.inep;
+      if (cb.checked) state.selectedSchools.add(inep);
+      else state.selectedSchools.delete(inep);
+      const tr = cb.closest("tr");
+      if (tr) tr.classList.toggle("row-selected", cb.checked);
+      const allNowSelected = allIneps.every((i) => state.selectedSchools.has(i));
+      if (selectAllEl) selectAllEl.checked = allNowSelected;
+      updateSelectionBar();
+    });
+  });
+
+  $$("#schoolsTable .rec-toggle").forEach((tog) => {
+    tog.addEventListener("change", () => updateSchoolField(tog.dataset.inep, tog.dataset.field, tog.checked ? "realizado" : ""));
+  });
+
+  $$("#schoolsTable .table-select").forEach((sel) => {
+    sel.addEventListener("change", () => updateSchoolField(sel.dataset.inep, sel.dataset.field, sel.value));
+  });
 
   $$("#schoolsTable [data-inep]").forEach((b) => {
-    b.addEventListener("click", () => openSchoolDetails(b.dataset.inep));
+    if (b.tagName === "BUTTON") b.addEventListener("click", () => openSchoolDetails(b.dataset.inep));
   });
 }
 
@@ -1354,6 +1463,8 @@ function renderRegionalInsights(rows, summary) {
 function filteredRows(rows) {
   const query = normalize($("#schoolSearch")?.value || "");
   const status = $("#statusFilter")?.value || "todos";
+  const recursoF = $("#recursoFilter")?.value || "todos";
+  const resultadoF = $("#resultadoFilter")?.value || "todos";
   return rows.filter((row) => {
     const matchesQuery = normalize(`${row.gre} ${row.inep} ${row.escola}`).includes(query);
     const matchesStatus =
@@ -1362,11 +1473,136 @@ function filteredRows(rows) {
       (status === "nao-inscritas" && !row.inscrito) ||
       (status === "credenciadas" && row.credenciado) ||
       (status === "nao-credenciadas" && !row.credenciado);
-    return matchesQuery && matchesStatus;
+    const matchesRecurso =
+      recursoF === "todos" ||
+      (recursoF === "com-recurso" && row.recurso) ||
+      (recursoF === "sem-recurso" && !row.recurso) ||
+      row.recurso === recursoF;
+    const matchesResultado =
+      resultadoF === "todos" ||
+      (resultadoF === "pendente" && (row.resultado_inscricao === "pendente" || row.resultado_credenciamento === "pendente")) ||
+      (resultadoF === "deferido" && (row.resultado_inscricao === "deferido" || row.resultado_credenciamento === "deferido")) ||
+      (resultadoF === "indeferido" && (row.resultado_inscricao === "indeferido" || row.resultado_credenciamento === "indeferido"));
+    return matchesQuery && matchesStatus && matchesRecurso && matchesResultado;
   });
 }
 
 function getFilteredExportRows() { return filteredRows(getFormationRows()); }
+
+function updateSchoolField(inep, field, value) {
+  const formation = getFormation();
+  if (!formation) return;
+  if (!formation.recursoMap) formation.recursoMap = new Map();
+  const rec = formation.recursoMap.get(inep) || {};
+  rec[field] = value;
+  if (field === "recurso_inscricao") rec.resultado_inscricao = value === "realizado" ? "pendente" : "";
+  if (field === "recurso_credenciamento") rec.resultado_credenciamento = value === "realizado" ? "pendente" : "";
+  rec.formacao_id = formation.id;
+  rec.inep = inep;
+  formation.recursoMap.set(inep, rec);
+  if (!state.dirtyRecursos) state.dirtyRecursos = new Set();
+  state.dirtyRecursos.add(inep);
+  state.unsavedChanges = true;
+  renderFormationDetail();
+}
+
+async function saveFormationChanges() {
+  const formation = getFormation();
+  if (!formation) return;
+  const btn = $("#saveChangesBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "Salvando..."; }
+  try {
+    const dirty = state.dirtyRecursos || new Set();
+    const recursoMap = formation.recursoMap || new Map();
+    const records = [...dirty]
+      .filter((inep) => recursoMap.has(inep))
+      .map((inep) => {
+        const r = recursoMap.get(inep);
+        return {
+          formacao_id: formation.id,
+          inep,
+          recurso_inscricao: r.recurso_inscricao || "",
+          resultado_inscricao: r.resultado_inscricao || "",
+          recurso_credenciamento: r.recurso_credenciamento || "",
+          resultado_credenciamento: r.resultado_credenciamento || "",
+          updated_at: new Date().toISOString(),
+        };
+      });
+    if (records.length && db) {
+      const { error } = await db.from("escola_recurso").upsert(records, { onConflict: "formacao_id,inep" });
+      if (error) throw error;
+    }
+    state.dirtyRecursos = new Set();
+    state.unsavedChanges = false;
+    if (btn) btn.classList.add("hidden");
+    notify("Alterações salvas", `${records.length} escola(s) gravadas no banco.`);
+    renderFormationDetail();
+  } catch (err) {
+    notify("Erro ao salvar", err.message || "Verifique a conexão com o banco.", "error");
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Salvar alterações"; }
+  }
+}
+
+function updateSelectionBar() {
+  const bar = $("#selectionBar");
+  if (!bar) return;
+  const count = state.selectedSchools.size;
+  bar.classList.toggle("hidden", count === 0);
+  const label = bar.querySelector("#selectionCount");
+  if (label) label.textContent = `${count} escola${count !== 1 ? "s" : ""} selecionada${count !== 1 ? "s" : ""}`;
+}
+
+function applyRecursoToSelected(tipo, campo) {
+  const formation = getFormation();
+  if (!formation) return;
+  if (!formation.recursoMap) formation.recursoMap = new Map();
+  if (!state.dirtyRecursos) state.dirtyRecursos = new Set();
+  state.selectedSchools.forEach((inep) => {
+    const rec = formation.recursoMap.get(inep) || { formacao_id: formation.id, inep };
+    rec[campo] = tipo;
+    const resCampo = campo === "recurso_inscricao" ? "resultado_inscricao" : "resultado_credenciamento";
+    rec[resCampo] = tipo === "realizado" ? "pendente" : "";
+    formation.recursoMap.set(inep, rec);
+    state.dirtyRecursos.add(inep);
+  });
+  state.unsavedChanges = true;
+  clearSelection();
+  renderFormationDetail();
+}
+
+function renderPrazoRecursoRow(formation) {
+  const el = $("#prazoRecursoRow");
+  if (!el) return;
+  const badges = [];
+  const dInsc = daysUntil(formation.prazoRecursoInscricao);
+  const dCred = daysUntil(formation.prazoRecursoCredenciamento);
+  if (dInsc !== null) {
+    const cls = dInsc < 0 ? "expired" : dInsc <= 7 ? "urgent" : "";
+    badges.push(`<span class="countdown-badge ${cls}">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Recurso inscrição: ${dInsc < 0 ? "encerrado" : dInsc === 0 ? "hoje é o último dia" : `${dInsc}d restantes`}
+    </span>`);
+  }
+  if (dCred !== null) {
+    const cls = dCred < 0 ? "expired" : dCred <= 7 ? "urgent" : "";
+    badges.push(`<span class="countdown-badge event ${cls}">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Recurso credenciamento: ${dCred < 0 ? "encerrado" : dCred === 0 ? "hoje é o último dia" : `${dCred}d restantes`}
+    </span>`);
+  }
+  el.innerHTML = badges.join("");
+  el.classList.toggle("hidden", badges.length === 0);
+}
+
+function clearSelection() {
+  state.selectedSchools.clear();
+  $$("#schoolsTable .row-check").forEach((cb) => { cb.checked = false; });
+  $$("#schoolsTable tr.row-selected").forEach((tr) => tr.classList.remove("row-selected"));
+  const sel = $("#selectAllCheck");
+  if (sel) sel.checked = false;
+  updateSelectionBar();
+}
 
 function getExportFileName(extension) {
   const formation = getFormation();
@@ -1383,17 +1619,28 @@ function downloadFilteredSpreadsheet() {
     notify("Nada para baixar", "Nenhuma escola foi encontrada com o filtro atual.", "warning");
     return;
   }
-  const headers = ["GRE", "INEP", "Escola", "Inscrito", "Credenciado", "Representante", "Matricula"];
-  const csvRows = [
+  const resLabel = (v) => v === "deferido" ? "DEFERIDO" : v === "indeferido" ? "INDEFERIDO" : v === "pendente" ? "PENDENTE" : "";
+  const headers = ["GRE", "INEP", "ESCOLA", "NOME", "MATRICULA", "INSCRITO", "CREDENCIADO",
+    "RECURSO INSCRIÇÃO", "RESULTADO", "RECURSO CREDENCIAMENTO", "RESULTADO"];
+  const data = [
     headers,
-    ...rows.map((row) => {
-      const rep = getRepresentative(row);
-      return [row.gre, row.inep, row.escola, row.inscrito ? "Sim" : "Não", row.credenciado ? "Sim" : "Não", rep.nome || "", rep.matricula || ""];
+    ...rows.flatMap((row) => {
+      const reps = row.representantes.length ? row.representantes : [{ nome: "", matricula: "" }];
+      return reps.map((rep) => [
+        row.gre, row.inep, row.escola, rep.nome || "", rep.matricula || "",
+        row.inscrito ? "SIM" : "NÃO", row.credenciado ? "SIM" : "NÃO",
+        row.recurso_inscricao === "realizado" ? "REALIZADO" : "",
+        resLabel(row.resultado_inscricao),
+        row.recurso_credenciamento === "realizado" ? "REALIZADO" : "",
+        resLabel(row.resultado_credenciamento),
+      ]);
     }),
   ];
-  const csv = `﻿${csvRows.map((r) => r.map(csvCell).join(";")).join("\r\n")}`;
-  downloadBlob(csv, getExportFileName("csv"), "text/csv;charset=utf-8");
-  notify("Planilha gerada", `${rows.length} escolas exportadas em CSV.`);
+  const ws = window.XLSX.utils.aoa_to_sheet(data);
+  const wb = window.XLSX.utils.book_new();
+  window.XLSX.utils.book_append_sheet(wb, ws, "Formação");
+  window.XLSX.writeFile(wb, getExportFileName("xlsx"));
+  notify("Planilha gerada", `${rows.length} escolas exportadas em XLSX.`);
 }
 
 function csvCell(value) {
@@ -1546,121 +1793,93 @@ function statusPill(condition, positive, negative) {
   return `<span class="pill ${cls}">${condition ? positive : negative}</span>`;
 }
 
-function openSheetUrlDialog() {
-  const formation = getFormation();
-  if (!formation) return;
-  $("#sheetUrlInput").value = formation.sheetUrl || "";
-  $("#sheetUrlDialog").showModal();
-}
 
-async function saveSheetUrl(event) {
-  event.preventDefault();
-  await withButtonBusy(event.submitter, "Salvando...", async () => {
+async function importCsvFile(file) {
+  await withButtonBusy($("#importCsvBtn"), "Importando...", async () => {
     const formation = getFormation();
     if (!formation) return;
-    const form = new FormData(event.target);
-    formation.sheetUrl = normalizeSheetUrl(String(form.get("sheetUrl") || "").trim());
     try {
-      await persistFormation(formation);
-      notify("URL salva", "A planilha da formação foi atualizada no banco.");
-    } catch (error) {
-      console.warn("Não foi possível salvar a URL no Supabase.", error);
-      saveStored("monitor-formations", state.formations);
-      notify("URL salva localmente", "Não foi possível gravar no Supabase agora.", "warning");
-    }
-    $("#sheetUrlDialog").close();
-    render();
-  });
-}
-
-async function clearSheetUrl() {
-  await withButtonBusy($("#clearSheetUrl"), "Removendo...", async () => {
-    const formation = getFormation();
-    if (!formation) return;
-    formation.sheetUrl = "";
-    try {
-      await persistFormation(formation);
-      notify("URL removida", "A formação ficou sem planilha conectada.");
-    } catch (error) {
-      console.warn("Não foi possível limpar a URL no Supabase.", error);
-      saveStored("monitor-formations", state.formations);
-      notify("URL removida localmente", "Não foi possível gravar no Supabase agora.", "warning");
-    }
-    $("#sheetUrlDialog").close();
-    render();
-  });
-}
-
-async function syncSelectedFormation(options = {}) {
-  const triggerButton = options instanceof Event ? options.currentTarget : null;
-  const silent = Boolean(options.silent);
-  await withButtonBusy(silent ? null : triggerButton, "Atualizando...", async () => {
-    const formation = getFormation();
-    if (!formation) return;
-    if (state.syncingFormationId === formation.id) return;
-    if (!formation.sheetUrl) {
-      if (!silent) notify("Sem planilha conectada", "Adicione a URL da planilha antes de atualizar.", "warning");
-      return;
-    }
-    try {
-      state.syncingFormationId = formation.id;
-      if ($("#formationSyncStatus")) {
-        $("#formationSyncStatus").textContent = silent ? "Atualizacao automatica em andamento..." : "Atualizando planilha...";
+      let rows2D;
+      if (/\.xlsx?$/i.test(file.name)) {
+        const buffer = await file.arrayBuffer();
+        const wb = window.XLSX.read(buffer, { type: "array" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        rows2D = window.XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+      } else {
+        rows2D = parseCsv(await file.text());
       }
-      const response = await fetch(normalizeSheetUrl(formation.sheetUrl), { cache: "no-store" });
-      if (!response.ok) throw new Error("Não foi possível acessar a planilha.");
-      const csv = await response.text();
-      if (/^\s*</.test(csv)) throw new Error("O Google retornou uma página em vez do CSV.");
-      formation.rows = parseFormationCsv(csv);
-      if (!formation.rows.length) throw new Error("A planilha foi acessada, mas nenhum INEP foi encontrado.");
+      const rows = parseFormationRows(rows2D);
+      if (!rows.length) throw new Error("Nenhum INEP encontrado. Verifique se o arquivo tem as colunas GRE, INEP, ESCOLA, INSCRITO, CREDENCIADO.");
+      formation.rows = rows;
       await persistFormationRows(formation);
-      if ($("#formationSyncStatus")) {
-        $("#formationSyncStatus").textContent = `Atualizado em ${new Date().toLocaleString("pt-BR")}.`;
-      }
-      if (!silent) notify("Planilha atualizada", `${formation.rows.length} escolas salvas no banco de dados.`);
+      notify("Importação concluída", `${rows.length} escolas salvas no banco de dados.`);
       renderFormationCards();
       renderFormationDetail();
-    } catch (error) {
-      if ($("#formationSyncStatus")) {
-        $("#formationSyncStatus").textContent = `${error.message} Verifique se a planilha esta publicada na web como CSV.`;
-      }
-      if (!silent) notify("Falha ao atualizar", error.message, "error");
-    } finally {
-      state.syncingFormationId = null;
+    } catch (err) {
+      notify("Erro na importação", err.message || "Verifique o formato do arquivo.", "error");
     }
   });
 }
 
-function normalizeSheetUrl(url) {
-  if (!url) return "";
-  const match = url.match(/docs\.google\.com\/spreadsheets\/d\/([^/]+)/);
-  if (!match || url.includes("/pub?") || url.includes("/export?")) return url;
-  const gid = url.match(/[?#&]gid=(\d+)/)?.[1] || "0";
-  return `https://docs.google.com/spreadsheets/d/${match[1]}/gviz/tq?tqx=out:csv&gid=${gid}`;
-}
 
 function parseFormationCsv(csv) {
-  const rows = parseCsv(csv);
+  return parseFormationRows(parseCsv(csv));
+}
+
+function parseFormationRows(rows) {
   if (!rows.length) return [];
-  const headers = rows[0].map(normalizeKey);
-  const records = rows.slice(1).map((row) => Object.fromEntries(headers.map((k, i) => [k, row[i]])));
+
+  // Build index map — handle duplicate "resultado" columns by order
+  const rawHeaders = rows[0].map((h) => normalizeKey(String(h ?? "")));
+  const idx = {};
+  let resultadoCount = 0;
+  rawHeaders.forEach((h, i) => {
+    if (h === "resultado") {
+      resultadoCount++;
+      idx[resultadoCount === 1 ? "resultado_inscricao" : "resultado_credenciamento"] = i;
+    } else if (!(h in idx)) {
+      idx[h] = i;
+    }
+  });
+
+  const col = (row, ...keys) => {
+    for (const k of keys) {
+      if (idx[k] !== undefined) return String(row[idx[k]] ?? "").trim();
+    }
+    return "";
+  };
+
+  const mapRes = (v) => { const n = normalize(v); return n === "deferido" ? "deferido" : n === "indeferido" ? "indeferido" : ""; };
+
   const byInep = new Map();
-  records.forEach((record, index) => {
-    const inep = String(record.inep || record.codigoinep || record.codinep || "").trim();
+  rows.slice(1).forEach((row, i) => {
+    const inep = col(row, "inep", "codigoinep", "codinep");
     if (!inep) return;
-    if (!byInep.has(inep)) byInep.set(inep, { inep, inscrito: false, credenciado: false, representantes: [] });
+    if (!byInep.has(inep)) {
+      byInep.set(inep, {
+        inep,
+        inscrito: false,
+        credenciado: false,
+        recurso_inscricao: normalize(col(row, "recursoinscricao", "recursoinscricoes")) === "realizado" ? "realizado" : "",
+        resultado_inscricao: mapRes(col(row, "resultado_inscricao")),
+        recurso_credenciamento: normalize(col(row, "recursocredenciamento")) === "realizado" ? "realizado" : "",
+        resultado_credenciamento: mapRes(col(row, "resultado_credenciamento")),
+        representantes: [],
+      });
+    }
     const item = byInep.get(inep);
-    const inscrito = yes(record.inscrito || record.inscricao || "sim");
-    const credenciado = yes(record.credenciado || record.credenciamento);
+    const inscrito = yes(col(row, "inscrito", "inscricao"));
+    const credenciado = yes(col(row, "credenciado", "credenciamento"));
     item.inscrito = item.inscrito || inscrito;
     item.credenciado = item.credenciado || credenciado;
     item.representantes.push({
-      nome: record.nome || record.nomerepresentante || record.representante || `Representante ${index + 1}`,
-      matricula: record.matricula || record.cpf || "",
+      nome: col(row, "nome", "nomerepresentante", "representante") || `Representante ${i + 1}`,
+      matricula: col(row, "matricula", "cpf"),
       inscrito,
       credenciado,
     });
   });
+
   return [...byInep.values()];
 }
 
