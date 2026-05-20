@@ -420,6 +420,7 @@ function bindEvents() {
   on("#formationForm", "submit", saveFormation);
   on("#cancelFormationForm", "click", () => showAdminFormationView("list"));
   on("#backToFormations", "click", closeFormationDetail);
+  on("#reloadRecursoBtn", "click", reloadRecursoMap);
   on("#importCsvBtn", "click", () => $("#importCsvInput")?.click());
   on("#importCsvInput", "change", (e) => {
     const file = e.target.files?.[0];
@@ -1528,6 +1529,24 @@ function updateSchoolField(inep, field, value) {
   renderFormationDetail();
 }
 
+async function reloadRecursoMap() {
+  const formation = getFormation();
+  if (!formation || !db) return;
+  const btn = $("#reloadRecursoBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "Atualizando..."; }
+  try {
+    const { data, error } = await db.from("escola_recurso").select("*").eq("formacao_id", formation.id);
+    if (error) throw error;
+    formation.recursoMap = new Map((data || []).map((r) => [r.inep, r]));
+    renderFormationDetail();
+    notify("Dados atualizados", "Recursos e resultados recarregados do banco.");
+  } catch (err) {
+    notify("Erro ao atualizar", err.message, "error");
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Atualizar recursos"; }
+  }
+}
+
 async function saveFormationChanges() {
   const formation = getFormation();
   if (!formation) return;
@@ -1557,7 +1576,7 @@ async function saveFormationChanges() {
     state.dirtyRecursos = new Set();
     state.unsavedChanges = false;
     if (btn) btn.classList.add("hidden");
-    notify("Alterações salvas", `${records.length} escola(s) gravadas no banco.`);
+    notify("Alterações salvas", `${records.length} escola(s) gravadas. O outro perfil verá ao clicar em "Atualizar recursos".`);
     renderFormationDetail();
   } catch (err) {
     notify("Erro ao salvar", err.message || "Verifique a conexão com o banco.", "error");
