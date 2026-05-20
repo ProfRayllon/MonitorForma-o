@@ -802,6 +802,23 @@ option { color: #111; background: #fff; }
 .detail-header { justify-content: flex-end; margin-top: -4px; }
 .detail-title { align-items: flex-start; }
 .detail-title h3 { font-size: 1.3rem; font-weight: 800; }
+.import-timestamp,
+.event-updated {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+.import-timestamp {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 4px 9px;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.08);
+  color: var(--accent);
+}
+.event-updated { display: block; margin-top: -2px; }
 
 .choice-grid {
   display: grid;

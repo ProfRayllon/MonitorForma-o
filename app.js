@@ -361,6 +361,7 @@ async function loadFormations() {
 
     formations.forEach((f) => {
       f.rows = rowsByFormation.get(f.id) || [];
+      f.lastImportedAt = latestTimestamp(f.rows.map((row) => row.importedAt));
       f.recursoMap = recursoByFormation.get(f.id) || new Map();
     });
 
@@ -412,6 +413,25 @@ function toDbFormation(formation) {
   };
 }
 
+function latestTimestamp(values) {
+  return values.reduce((latest, value) => {
+    if (!value) return latest;
+    const time = new Date(value).getTime();
+    if (Number.isNaN(time)) return latest;
+    return !latest || time > new Date(latest).getTime() ? value : latest;
+  }, "");
+}
+
+function formatDateTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(date);
+}
+
 function groupDbRows(rows) {
   const byFormation = new Map();
   rows.forEach((record) => {
@@ -427,12 +447,14 @@ function groupDbRows(rows) {
         escola: record.escola || "",
         inscrito: false,
         credenciado: false,
+        importedAt: record.imported_at || "",
         representantes: [],
       });
     }
     const item = byInep.get(inep);
     if (!item.gre && record.gre) item.gre = record.gre;
     if (!item.escola && record.escola) item.escola = record.escola;
+    item.importedAt = latestTimestamp([item.importedAt, record.imported_at]);
     const inscrito = Boolean(record.inscrito);
     const credenciado = Boolean(record.credenciado);
     item.inscrito = item.inscrito || inscrito;
@@ -510,6 +532,7 @@ async function persistFormationRows(formation) {
 
   const rowsByFormation = groupDbRows(savedRows);
   formation.rows = rowsByFormation.get(formation.id) || [];
+  formation.lastImportedAt = latestTimestamp(formation.rows.map((row) => row.importedAt)) || new Date().toISOString();
   saveStored("monitor-formations", state.formations);
   return true;
 }
@@ -1390,6 +1413,7 @@ function renderFormationCards() {
             <span>Meta ${s.total.toLocaleString("pt-BR")}</span>
           </div>
           <strong>${esc(formation.nome)}</strong>
+          ${formation.lastImportedAt ? `<small class="event-updated">Base atualizada em ${esc(formatDateTime(formation.lastImportedAt))}</small>` : ""}
           <small>${s.inscritos}/${s.total} escolas inscritas no recorte atual</small>
           <div class="event-progress"><span style="width:${pI}%"></span></div>
           <div class="event-foot">
@@ -1470,6 +1494,12 @@ function renderFormationDetail() {
   const naoCredenciados = allRows.length - credenciados;
 
   $("#formationName").textContent = formation.nome;
+  const importTimestamp = $("#formationImportTimestamp");
+  if (importTimestamp) {
+    const label = formatDateTime(formation.lastImportedAt);
+    importTimestamp.textContent = label ? `Base atualizada em ${label}` : "Base ainda não importada";
+    importTimestamp.classList.toggle("hidden", !label && !isAdmin);
+  }
 
   const metricValues = {
     total: allRows.length,
