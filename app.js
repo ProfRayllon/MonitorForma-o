@@ -554,6 +554,10 @@ function bindEvents() {
   });
   on("#schoolSearch", "input", renderFormationDetail);
   on("#statusFilter", "change", renderFormationDetail);
+  on("#greFilter", "change", () => {
+    clearSelection();
+    renderFormationDetail();
+  });
   on("#recursoFilter", "change", renderFormationDetail);
   on("#resultadoFilter", "change", renderFormationDetail);
   on("#selectAllCheck", "change", (e) => {
@@ -1458,6 +1462,7 @@ function renderFormationDetail() {
 
   const isAdmin = state.user?.perfil === "admin";
   const allRows = getFormationRows(formation);
+  if (isAdmin) syncGreFilterOptions(allRows);
   const rows = filteredRows(allRows);
   const inscritos = allRows.filter((r) => r.inscrito).length;
   const naoInscritos = allRows.length - inscritos;
@@ -1611,13 +1616,28 @@ function renderRegionalInsights(rows, summary) {
   $("#credentialPendingLabel").textContent = `Pendentes ${summary.naoCredenciados} escolas`;
 }
 
+function syncGreFilterOptions(rows) {
+  const select = $("#greFilter");
+  if (!select) return;
+  const current = select.value || "todos";
+  const gres = [...new Set(rows.map((row) => row.gre).filter(Boolean))]
+    .sort((a, b) => getGreNumber(a) - getGreNumber(b));
+  select.innerHTML = [
+    `<option value="todos">GRE: Todas</option>`,
+    ...gres.map((gre) => `<option value="${esc(gre)}">${esc(gre)}</option>`),
+  ].join("");
+  select.value = gres.includes(current) ? current : "todos";
+}
+
 function filteredRows(rows) {
   const query = normalize($("#schoolSearch")?.value || "");
   const status = $("#statusFilter")?.value || "todos";
+  const gre = state.user?.perfil === "admin" ? ($("#greFilter")?.value || "todos") : "todos";
   const recursoF = $("#recursoFilter")?.value || "todos";
   const resultadoF = $("#resultadoFilter")?.value || "todos";
   return rows.filter((row) => {
     const matchesQuery = normalize(`${row.gre} ${row.inep} ${row.escola}`).includes(query);
+    const matchesGre = gre === "todos" || row.gre === gre;
     const matchesStatus =
       status === "todos" ||
       (status === "inscritas" && row.inscrito) ||
@@ -1635,7 +1655,7 @@ function filteredRows(rows) {
       (resultadoF === "pendente" && (row.resultado_inscricao === "pendente" || row.resultado_credenciamento === "pendente")) ||
       (resultadoF === "deferido" && (row.resultado_inscricao === "deferido" || row.resultado_credenciamento === "deferido")) ||
       (resultadoF === "indeferido" && (row.resultado_inscricao === "indeferido" || row.resultado_credenciamento === "indeferido"));
-    return matchesQuery && matchesStatus && matchesRecurso && matchesResultado;
+    return matchesQuery && matchesGre && matchesStatus && matchesRecurso && matchesResultado;
   });
 }
 
@@ -1972,16 +1992,30 @@ function renderGreBars(rows) {
     .map((item) => {
       const range = rangeFor(item.percent);
       const fillH = Math.max(4, Math.round((item.percent / maxPercent) * 100));
+      const selected = $("#greFilter")?.value === item.gre ? " selected" : "";
       return `
-        <div class="goal-bar goal-${range.key}" title="${esc(`${item.gre}: ${item.value}/${item.total} ${modeLabel.toLowerCase()} (${item.percent}%)`)}">
+        <button class="goal-bar goal-${range.key}${selected}" type="button" data-gre="${esc(item.gre)}" title="${esc(`${item.gre}: ${item.value}/${item.total} ${modeLabel.toLowerCase()} (${item.percent}%)`)}">
           <span class="goal-fill" style="height:${fillH}%" data-pct="${item.percent}%">
             <span class="goal-count">${item.value}/${item.total}</span>
           </span>
           <span class="goal-label">${esc(item.gre.replace(" GRE", ""))}<small>GRE</small></span>
-        </div>
+        </button>
       `;
     })
     .join("");
+
+  $$("#greBars [data-gre]").forEach((bar) => {
+    bar.addEventListener("click", () => {
+      const greFilter = $("#greFilter");
+      if (!greFilter) return;
+      greFilter.value = greFilter.value === bar.dataset.gre ? "todos" : bar.dataset.gre;
+      const search = $("#schoolSearch");
+      if (search) search.value = "";
+      clearSelection();
+      renderFormationDetail();
+      $("#schoolsTable")?.closest(".panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
 
   $("#goalBarLegend").innerHTML = ranges
     .map((r) => `<span><i style="background:${r.color};border-radius:3px"></i>${r.label}</span>`)
