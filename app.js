@@ -197,6 +197,53 @@ async function insertDbRows(table, rows, chunkSize = 500) {
   return insertedIds;
 }
 
+async function upsertDbRows(table, rows, options = {}, chunkSize = 500) {
+  for (let i = 0; i < rows.length; i += chunkSize) {
+    const { error } = await db.from(table).upsert(rows.slice(i, i + chunkSize), options);
+    if (error) throw error;
+  }
+}
+
+function isMissingTableError(error) {
+  const message = normalize(error?.message || error?.details || "");
+  if (message.includes("column")) return false;
+  return (
+    error?.code === "42P01" ||
+    error?.code === "PGRST205" ||
+    message.includes("relation") && message.includes("does not exist") ||
+    message.includes("could not find") ||
+    message.includes("nao encontrada") ||
+    message.includes("não encontrada")
+  );
+}
+
+function getResourceState(row) {
+  const inscricao = row.recurso_inscricao === "realizado";
+  const credenciamento = row.recurso_credenciamento === "realizado";
+  return {
+    inscricao,
+    credenciamento,
+    any: inscricao || credenciamento,
+    type: inscricao && credenciamento ? "ambos" : inscricao ? "inscricao" : credenciamento ? "credenciamento" : "",
+  };
+}
+
+function setSaveButtonsBusy(isBusy) {
+  $$("#saveChangesBtn, #saveChangesBtnInline").forEach((button) => {
+    button.disabled = isBusy;
+    button.textContent = isBusy ? "Salvando..." : "Salvar alterações";
+  });
+}
+
+function updateSaveControls() {
+  const hasChanges = Boolean(state.unsavedChanges);
+  const saveBar = $("#saveBar");
+  if (saveBar) saveBar.classList.toggle("hidden", !hasChanges);
+  $$("#saveChangesBtn, #saveChangesBtnInline").forEach((button) => {
+    button.classList.toggle("hidden", !hasChanges);
+  });
+}
+
 async function loadUsers() {
   const localUsers = normalizeUsers(loadStored("monitor-users", state.base.users));
   if (!db) return localUsers;
@@ -299,7 +346,7 @@ async function loadFormations() {
     let recursoRows = [];
     try {
       recursoRows = await selectAllDbRows("escola_recurso", "*", (query) =>
-        query.in("formacao_id", formationIds).order("id", { ascending: true }),
+        query.in("formacao_id", formationIds).order("inep", { ascending: true }),
       );
       state.recursoTableMissing = false;
     } catch (recursoError) {
@@ -521,6 +568,7 @@ function bindEvents() {
   });
   on("#clearSelection", "click", clearSelection);
   on("#saveChangesBtn", "click", saveFormationChanges);
+  on("#saveChangesBtnInline", "click", saveFormationChanges);
   on("#bulkRecursoInsc", "click", () => applyRecursoToSelected("realizado", "recurso_inscricao"));
   on("#bulkRecursoCred", "click", () => applyRecursoToSelected("realizado", "recurso_credenciamento"));
   on("#bulkClearRecurso", "click", () => { applyRecursoToSelected("", "recurso_inscricao"); applyRecursoToSelected("", "recurso_credenciamento"); });
@@ -1262,6 +1310,9 @@ function getFormationRows(formation = getFormation()) {
   // Isso garante que todos os INEPs da planilha aparecem, independente do base.json
   let rows = (formation.rows || []).map((row) => {
     const rec = recursoMap.get(String(row.inep)) || {};
+    const recurso_inscricao = rec.recurso_inscricao || "";
+    const recurso_credenciamento = rec.recurso_credenciamento || "";
+    const recursoState = getResourceState({ recurso_inscricao, recurso_credenciamento });
     return {
       gre: row.gre || "",
       inep: String(row.inep),
@@ -1270,9 +1321,11 @@ function getFormationRows(formation = getFormation()) {
       credenciado: Boolean(row.credenciado),
       representantes: row.representantes || [],
       duplicado: (row.representantes || []).length > 1,
-      recurso_inscricao: rec.recurso_inscricao || "",
+      recurso: recursoState.type,
+      temRecurso: recursoState.any,
+      recurso_inscricao,
       resultado_inscricao: rec.resultado_inscricao || "",
-      recurso_credenciamento: rec.recurso_credenciamento || "",
+      recurso_credenciamento,
       resultado_credenciamento: rec.resultado_credenciamento || "",
     };
   });
@@ -1443,10 +1496,7 @@ function renderFormationDetail() {
   if (isAdmin) renderGreBars(allRows);
   if (!isAdmin) renderRegionalInsights(allRows, { inscritos, credenciados, naoCredenciados });
   renderPrazoRecursoRow(formation);
-  const saveBar = $("#saveBar");
-  if (saveBar) saveBar.classList.add("hidden");
-  const saveBtn = $("#saveChangesBtn");
-  if (saveBtn) saveBtn.classList.toggle("hidden", !state.unsavedChanges);
+  updateSaveControls();
 
   const dbWarn = $("#dbWarning");
   if (dbWarn) {
@@ -1576,9 +1626,10 @@ function filteredRows(rows) {
       (status === "nao-credenciadas" && !row.credenciado);
     const matchesRecurso =
       recursoF === "todos" ||
-      (recursoF === "com-recurso" && row.recurso) ||
-      (recursoF === "sem-recurso" && !row.recurso) ||
-      row.recurso === recursoF;
+      (recursoF === "com-recurso" && row.temRecurso) ||
+      (recursoF === "sem-recurso" && !row.temRecurso) ||
+      (recursoF === "inscricao" && row.recurso_inscricao === "realizado") ||
+      (recursoF === "credenciamento" && row.recurso_credenciamento === "realizado");
     const matchesResultado =
       resultadoF === "todos" ||
       (resultadoF === "pendente" && (row.resultado_inscricao === "pendente" || row.resultado_credenciamento === "pendente")) ||
@@ -1591,6 +1642,11 @@ function filteredRows(rows) {
 function getFilteredExportRows() { return filteredRows(getFormationRows()); }
 
 let _autoSaveTimer = null;
+
+function scheduleResourceAutoSave() {
+  clearTimeout(_autoSaveTimer);
+  _autoSaveTimer = setTimeout(() => saveFormationChanges(), 1000);
+}
 
 function updateSchoolField(inep, field, value) {
   const formation = getFormation();
@@ -1627,18 +1683,33 @@ async function reloadAllFormations() {
 
 async function reloadRecursoMap() {
   const formation = getFormation();
-  if (!formation || !db) return;
+  if (!formation) return;
+  if (!db) {
+    notify("Sem conexão", "Não foi possível atualizar os recursos sem acesso ao banco.", "error");
+    return;
+  }
+  if (state.unsavedChanges && state.dirtyRecursos?.size) {
+    notify("Salve as alterações primeiro", "Há recursos pendentes nesta tela. Salve antes de atualizar do banco.", "warning");
+    return;
+  }
   const btn = $("#reloadRecursoBtn");
   if (btn) { btn.disabled = true; btn.textContent = "Atualizando..."; }
   try {
     const data = await selectAllDbRows("escola_recurso", "*", (query) =>
-      query.eq("formacao_id", formation.id).order("id", { ascending: true }),
+      query.eq("formacao_id", formation.id).order("inep", { ascending: true }),
     );
+    state.recursoTableMissing = false;
     formation.recursoMap = new Map((data || []).map((r) => [r.inep, r]));
     renderFormationDetail();
     notify("Dados atualizados", "Recursos e resultados recarregados do banco.");
   } catch (err) {
-    notify("Erro ao atualizar", err.message, "error");
+    if (isMissingTableError(err)) {
+      state.recursoTableMissing = true;
+      renderFormationDetail();
+      notify("Tabela de recursos ausente", "Execute o SQL de migração no Supabase para ativar recursos e resultados.", "error");
+    } else {
+      notify("Erro ao atualizar", err.message, "error");
+    }
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = "Atualizar recursos"; }
   }
@@ -1647,14 +1718,15 @@ async function reloadRecursoMap() {
 async function saveFormationChanges() {
   const formation = getFormation();
   if (!formation || !state.unsavedChanges) return;
+  setSaveButtonsBusy(true);
   const btn = $("#saveChangesBtn");
-  if (btn) { btn.disabled = true; btn.textContent = "Salvando..."; }
   try {
     const dirty = state.dirtyRecursos;
     const recursoMap = formation.recursoMap || new Map();
     if (!dirty.size) {
       state.unsavedChanges = false;
-      if (btn) btn.classList.add("hidden");
+      updateSaveControls();
+      setSaveButtonsBusy(false);
       return;
     }
     const records = [...dirty]
@@ -1673,26 +1745,31 @@ async function saveFormationChanges() {
       });
     if (!records.length) {
       state.unsavedChanges = false;
-      if (btn) btn.classList.add("hidden");
+      updateSaveControls();
+      setSaveButtonsBusy(false);
       return;
     }
     if (!db) throw new Error("Sem conexão com o banco de dados.");
-    const { error } = await db.from("escola_recurso").upsert(records, { onConflict: "formacao_id,inep" });
-    if (error) throw error;
+    await upsertDbRows("escola_recurso", records, { onConflict: "formacao_id,inep" });
     // Confirma que salvou
-    const { data: check, error: checkErr } = await db
-      .from("escola_recurso")
-      .select("inep")
-      .eq("formacao_id", formation.id)
-      .in("inep", records.map((r) => r.inep));
-    if (checkErr || !check?.length) throw new Error("Dado não confirmado no banco após salvar.");
+    const check = await selectAllDbRows("escola_recurso", "inep", (query) =>
+      query.eq("formacao_id", formation.id).in("inep", records.map((r) => r.inep)),
+    );
+    if (check.length < records.length) throw new Error("Dado não confirmado no banco após salvar.");
+    state.recursoTableMissing = false;
     state.dirtyRecursos = new Set();
     state.unsavedChanges = false;
-    if (btn) btn.classList.add("hidden");
+    updateSaveControls();
+    setSaveButtonsBusy(false);
     notify("Salvo no banco ✓", `${records.length} escola(s) gravadas com sucesso.`);
     renderFormationDetail();
   } catch (err) {
     console.error("Erro ao salvar recurso:", err);
+    setSaveButtonsBusy(false);
+    if (isMissingTableError(err)) {
+      state.recursoTableMissing = true;
+      renderFormationDetail();
+    }
     notify("Erro ao salvar", err.message || "Verifique a conexão com o banco.", "error");
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = "Salvar alterações"; }
@@ -1724,6 +1801,7 @@ function applyRecursoToSelected(tipo, campo) {
   state.unsavedChanges = true;
   clearSelection();
   renderFormationDetail();
+  scheduleResourceAutoSave();
 }
 
 function renderPrazoRecursoRow(formation) {
