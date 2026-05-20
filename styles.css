@@ -2054,10 +2054,102 @@ tr.row-selected td { background: rgba(124,58,237,0.07); }
 
 @media (max-width: 640px) {
   .content { padding: 16px 16px 76px; }
-  .login-card { padding: 22px; }
-  .login-hero-inner { padding: 24px 20px; }
-  .login-hero-body h1 { font-size: 2rem; }
-  .login-right { padding: 20px; }
+  .login-screen {
+    display: block;
+    min-height: 100vh;
+    background: #08071a;
+  }
+  .login-hero {
+    min-height: auto;
+    overflow: visible;
+  }
+  .login-hero-inner {
+    min-height: auto;
+    padding: 26px 20px 10px;
+  }
+  .login-hero-body {
+    flex: initial;
+    justify-content: flex-start;
+    padding: 18px 0 0;
+  }
+  .login-hero-body h1 {
+    margin-bottom: 10px;
+    font-size: 1.72rem;
+    line-height: 1.04;
+  }
+  .login-desc {
+    display: block;
+    max-width: none;
+    margin-bottom: 14px;
+    font-size: 0.78rem;
+    line-height: 1.45;
+  }
+  .login-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .stat-chip {
+    min-width: 0;
+    gap: 2px;
+    padding: 8px 9px;
+  }
+  .stat-chip-icon svg {
+    width: 14px;
+    height: 14px;
+  }
+  .stat-chip strong {
+    font-size: 0.95rem;
+  }
+  .stat-chip span {
+    font-size: 0.56rem;
+    line-height: 1.15;
+  }
+  .login-right {
+    padding: 10px 20px 22px;
+    align-items: stretch;
+  }
+  .login-card {
+    max-width: none;
+    gap: 10px;
+    padding: 18px;
+    border-radius: 18px;
+  }
+  .login-brand-sm {
+    margin-bottom: 8px;
+    font-size: 0.82rem;
+  }
+  .login-brand-sm .brand-mark {
+    width: 30px;
+    height: 30px;
+  }
+  .login-card-header {
+    gap: 4px;
+  }
+  .login-card-header h2 {
+    font-size: 1.28rem;
+  }
+  .login-card-header .muted {
+    display: block;
+    font-size: 0.74rem;
+    line-height: 1.35;
+  }
+  .login-card label {
+    gap: 4px;
+    font-size: 0.74rem;
+  }
+  .login-input-wrap input,
+  .pass-toggle {
+    min-height: 40px;
+  }
+  .login-card .btn-primary {
+    min-height: 42px;
+    font-size: 0.9rem;
+  }
+  .login-footer-text {
+    margin-top: 10px;
+    font-size: 0.66rem;
+  }
 
   .metrics-grid { grid-template-columns: repeat(2, 1fr); }
   .metrics-grid .metric-primary { grid-column: 1 / -1; }
@@ -2073,7 +2165,355 @@ tr.row-selected td { background: rgba(124,58,237,0.07); }
   }
   .dialog-actions button, .secondary, .mini-button, .back-button { width: 100%; justify-content: center; }
 
-  .stat-chip { min-width: 0; flex: 1; }
+  #formationDetail .detail-header {
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  #formationDetail .detail-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+    gap: 6px;
+    width: 100%;
+  }
+  #formationDetail .detail-actions .back-button,
+  #formationDetail .detail-actions .secondary {
+    width: 100%;
+    min-height: 32px;
+    padding: 5px 6px;
+    gap: 4px;
+    border-radius: 9px;
+    font-size: 0.68rem;
+    font-weight: 500;
+    line-height: 1.08;
+    white-space: normal;
+  }
+  #formationDetail .detail-actions svg {
+    width: 11px;
+    height: 11px;
+  }
+  #formationDetail .detail-title {
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  #formationDetail .detail-title h3 {
+    font-size: 1.22rem;
+    line-height: 1.1;
+  }
+  #formationDetail .import-timestamp {
+    width: 100%;
+    padding: 6px 9px;
+    border-radius: 999px;
+    border: 1px solid rgba(56,189,248,0.28);
+    background: rgba(14,165,233,0.09);
+    font-size: 0.68rem;
+  }
+
+  #formationMetrics {
+    gap: 10px;
+  }
+  #formationMetrics .metric {
+    min-height: 92px;
+    padding: 12px;
+    border-radius: 12px;
+  }
+  #formationMetrics .metric-icon {
+    width: 28px;
+    height: 28px;
+    margin-bottom: 8px;
+    border-radius: 9px;
+  }
+  #formationMetrics .metric-icon svg {
+    width: 15px;
+    height: 15px;
+  }
+  #formationMetrics .metric span {
+    font-size: 0.62rem;
+    letter-spacing: 0.05em;
+  }
+  #formationMetrics .metric strong {
+    margin: 4px 0 2px;
+    font-size: 1.55rem;
+  }
+  #formationMetrics .metric small {
+    font-size: 0.68rem;
+  }
+
+  #goalPanel {
+    padding: 14px;
+    overflow: hidden;
+  }
+  #goalPanel .panel-head {
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  #goalPanel .panel-head h3 {
+    font-size: 1rem;
+  }
+  #goalChartToggle {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    gap: 6px;
+  }
+  #goalChartToggle .secondary {
+    min-height: 32px;
+    padding: 0 8px;
+    border-radius: 9px;
+    font-size: 0.72rem;
+    font-weight: 600;
+  }
+  #goalPanel .goal-grid {
+    gap: 14px;
+    justify-items: center;
+  }
+  #goalPanel .goal-grid > div:first-child {
+    width: 100%;
+    min-width: 0;
+  }
+  #goalPanel .goal-chart {
+    grid-auto-columns: minmax(30px, 1fr);
+    gap: 5px;
+    width: 100%;
+    height: 164px;
+    padding-top: 30px;
+  }
+  #goalPanel .goal-fill::before {
+    top: -22px;
+    font-size: 0.56rem;
+  }
+  #goalPanel .goal-count {
+    bottom: 6px;
+    font-size: 0.48rem;
+  }
+  #goalPanel .goal-label {
+    padding-top: 5px;
+    font-size: 0.58rem;
+  }
+  #goalPanel .goal-label small {
+    font-size: 0.48rem;
+  }
+  #goalPanel .goal-bar-legend {
+    gap: 5px 10px;
+    margin-top: 8px;
+    padding-top: 8px;
+  }
+  #goalPanel .goal-bar-legend span {
+    gap: 4px;
+    font-size: 0.62rem;
+  }
+  #goalPanel .goal-bar-legend i {
+    width: 8px;
+    height: 8px;
+  }
+  #goalPanel .goal-pie-wrap {
+    width: 100%;
+    align-items: center;
+    justify-content: center;
+  }
+  #goalPanel .goal-pie {
+    width: 122px;
+    box-shadow:
+      inset 0 0 0 17px var(--bg-soft),
+      0 0 22px 5px var(--pie-glow, rgba(16,185,129,0.42)),
+      0 0 44px 8px var(--pie-glow-far, rgba(16,185,129,0.16)),
+      0 10px 30px rgba(0,0,0,0.35);
+  }
+  #goalPanel .goal-pie strong {
+    margin-top: -18px;
+    font-size: 1.55rem;
+  }
+  #goalPanel .goal-pie span {
+    margin-top: 30px;
+    font-size: 0.58rem;
+  }
+  #goalPanel .goal-pie-info strong {
+    font-size: 0.78rem;
+  }
+  #goalPanel .goal-pie-info small {
+    font-size: 0.66rem;
+  }
+
+  #formationDetail .filters-panel {
+    padding: 14px;
+  }
+  #formationDetail .filters-panel .panel-head {
+    margin-bottom: 12px;
+  }
+  #formationDetail .filters-panel .panel-head h3 {
+    font-size: 1rem;
+  }
+  #formationDetail .filter-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  #formationDetail .search-wrap {
+    grid-column: 1 / -1;
+  }
+  #formationDetail .search,
+  #formationDetail select {
+    min-height: 36px;
+    padding: 0 10px;
+    border-radius: 9px;
+    font-size: 0.78rem;
+  }
+  #formationDetail .search {
+    padding-left: 34px !important;
+  }
+  #formationDetail .search-icon {
+    left: 11px;
+    width: 13px;
+    height: 13px;
+  }
+
+  #formationDetail > article.panel:last-of-type {
+    padding: 14px;
+  }
+  #formationDetail > article.panel:last-of-type .panel-head {
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  #formationDetail > article.panel:last-of-type .panel-head h3 {
+    font-size: 1rem;
+  }
+  #formationDetail .result-count-tag {
+    margin-top: 6px;
+    font-size: 0.64rem;
+  }
+  #formationDetail .export-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    width: 100%;
+  }
+  #formationDetail .export-actions .secondary,
+  #formationDetail .export-actions .save-inline-btn {
+    width: 100%;
+    min-height: 31px;
+    padding: 0 6px;
+    border-radius: 9px;
+    font-size: 0.66rem;
+    font-weight: 500;
+  }
+  #formationDetail .export-actions svg {
+    width: 11px;
+    height: 11px;
+  }
+  #formationDetail .table-wrap {
+    overflow-x: hidden;
+  }
+  #formationDetail .table-wrap table {
+    min-width: 0;
+    table-layout: fixed;
+  }
+  #formationDetail .table-wrap th,
+  #formationDetail .table-wrap td {
+    padding: 9px 5px;
+    font-size: 0.72rem;
+    line-height: 1.25;
+  }
+  #formationDetail .table-wrap th {
+    font-size: 0.6rem;
+    letter-spacing: 0.04em;
+  }
+  #formationDetail .table-wrap th:nth-child(1),
+  #formationDetail .table-wrap td:nth-child(1),
+  #formationDetail .table-wrap th:nth-child(4),
+  #formationDetail .table-wrap td:nth-child(4),
+  #formationDetail .table-wrap th:nth-child(7),
+  #formationDetail .table-wrap td:nth-child(7),
+  #formationDetail .table-wrap th:nth-child(8),
+  #formationDetail .table-wrap td:nth-child(8),
+  #formationDetail .table-wrap th:nth-child(9),
+  #formationDetail .table-wrap td:nth-child(9),
+  #formationDetail .table-wrap th:nth-child(10),
+  #formationDetail .table-wrap td:nth-child(10),
+  #formationDetail .table-wrap th:nth-child(11),
+  #formationDetail .table-wrap td:nth-child(11),
+  #formationDetail .table-wrap th:nth-child(12),
+  #formationDetail .table-wrap td:nth-child(12) {
+    display: none;
+  }
+  #formationDetail .table-wrap td[colspan] {
+    display: table-cell;
+  }
+  #formationDetail .table-wrap th:nth-child(2),
+  #formationDetail .table-wrap td:nth-child(2) {
+    width: 26%;
+  }
+  #formationDetail .table-wrap th:nth-child(3),
+  #formationDetail .table-wrap td:nth-child(3) {
+    width: 25%;
+  }
+  #formationDetail .table-wrap th:nth-child(5),
+  #formationDetail .table-wrap td:nth-child(5),
+  #formationDetail .table-wrap th:nth-child(6),
+  #formationDetail .table-wrap td:nth-child(6) {
+    width: 24.5%;
+  }
+  #formationDetail .inep-code {
+    font-size: 0.68rem;
+  }
+  #formationDetail .pill {
+    min-height: 22px;
+    padding: 2px 7px;
+    font-size: 0.64rem;
+  }
+
+  #formationListHeader {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+  #formationListHeader > div:last-child {
+    display: flex !important;
+    align-items: center !important;
+    flex-wrap: wrap;
+    gap: 6px !important;
+    justify-content: flex-start;
+    width: 100%;
+  }
+  #reloadFormationsBtn,
+  #formationAdminTabs .secondary {
+    width: auto;
+    min-height: 30px;
+    padding: 0 8px;
+    gap: 4px;
+    font-size: 0.68rem;
+    font-weight: 500;
+    line-height: 1;
+    border-radius: 9px;
+    white-space: nowrap;
+  }
+  #reloadFormationsBtn svg,
+  #formationAdminTabs .secondary svg {
+    width: 11px;
+    height: 11px;
+  }
+  #formationAdminTabs {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    width: auto;
+    margin-left: 0;
+  }
+  #formationCards .card-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    width: 100%;
+  }
+  #formationCards .card-actions .mini-button {
+    width: 100%;
+    min-height: 30px;
+    padding: 0 6px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    border-radius: 9px;
+  }
+
   .home-summary-grid { grid-template-columns: repeat(2, 1fr); }
 
 }
