@@ -1582,6 +1582,7 @@ function renderFormationDetail() {
   const sel = state.selectedSchools;
   const allIneps = rows.map((r) => String(r.inep));
   const allSelected = allIneps.length > 0 && allIneps.every((i) => sel.has(i));
+  renderSchoolResultCount(rows.length, allRows.length);
 
   $("#schoolsTable").innerHTML = rows.length
     ? rows.map((row) => {
@@ -1676,6 +1677,17 @@ function renderRegionalInsights(rows, summary) {
       : "Todas as escolas do recorte foram credenciadas.";
   $("#credentialDoneLabel").textContent = `Credenciadas ${summary.credenciados} escolas`;
   $("#credentialPendingLabel").textContent = `Pendentes ${summary.naoCredenciados} escolas`;
+}
+
+function renderSchoolResultCount(filteredCount, totalCount) {
+  const el = $("#schoolResultCount");
+  if (!el) return;
+  const filtered = Number(filteredCount || 0);
+  const total = Number(totalCount || 0);
+  const label = filtered === 1 ? "1 escola" : `${filtered.toLocaleString("pt-BR")} escolas`;
+  el.textContent = filtered === total
+    ? `${label} no total`
+    : `${label} encontradas de ${total.toLocaleString("pt-BR")}`;
 }
 
 function syncGreFilterOptions(rows) {
