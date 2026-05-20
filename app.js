@@ -432,6 +432,41 @@ function formatDateTime(value) {
   }).format(date);
 }
 
+function renderImportTimestamp(formation, isAdmin = state.user?.perfil === "admin") {
+  const importTimestamp = $("#formationImportTimestamp");
+  if (!importTimestamp) return;
+  const label = formatDateTime(formation?.lastImportedAt);
+  importTimestamp.textContent = label ? `Base atualizada em ${label}` : "Base ainda não importada";
+  importTimestamp.classList.toggle("hidden", !label && !isAdmin);
+}
+
+async function refreshFormationImportTimestamp(formation) {
+  if (!db || !formation?.id) return;
+  if (formation._importTimestampLoading || formation._importTimestampChecked) return;
+  formation._importTimestampLoading = true;
+  try {
+    const { data, error } = await db
+      .from("formacao_dados")
+      .select("imported_at")
+      .eq("formacao_id", formation.id)
+      .order("imported_at", { ascending: false })
+      .limit(1);
+    if (error) throw error;
+    const importedAt = data?.[0]?.imported_at || "";
+    if (importedAt && importedAt !== formation.lastImportedAt) {
+      formation.lastImportedAt = importedAt;
+      saveStored("monitor-formations", state.formations);
+      renderImportTimestamp(formation);
+      renderFormationCards();
+    }
+  } catch (error) {
+    console.warn("Não foi possível carregar a data da última importação.", error);
+  } finally {
+    formation._importTimestampLoading = false;
+    formation._importTimestampChecked = true;
+  }
+}
+
 function groupDbRows(rows) {
   const byFormation = new Map();
   rows.forEach((record) => {
@@ -533,6 +568,7 @@ async function persistFormationRows(formation) {
   const rowsByFormation = groupDbRows(savedRows);
   formation.rows = rowsByFormation.get(formation.id) || [];
   formation.lastImportedAt = latestTimestamp(formation.rows.map((row) => row.importedAt)) || new Date().toISOString();
+  formation._importTimestampChecked = true;
   saveStored("monitor-formations", state.formations);
   return true;
 }
@@ -1494,12 +1530,8 @@ function renderFormationDetail() {
   const naoCredenciados = allRows.length - credenciados;
 
   $("#formationName").textContent = formation.nome;
-  const importTimestamp = $("#formationImportTimestamp");
-  if (importTimestamp) {
-    const label = formatDateTime(formation.lastImportedAt);
-    importTimestamp.textContent = label ? `Base atualizada em ${label}` : "Base ainda não importada";
-    importTimestamp.classList.toggle("hidden", !label && !isAdmin);
-  }
+  renderImportTimestamp(formation, isAdmin);
+  refreshFormationImportTimestamp(formation);
 
   const metricValues = {
     total: allRows.length,
