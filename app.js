@@ -322,9 +322,18 @@ function groupDbRows(rows) {
     if (!byFormation.has(formacaoId)) byFormation.set(formacaoId, new Map());
     const byInep = byFormation.get(formacaoId);
     if (!byInep.has(inep)) {
-      byInep.set(inep, { inep, inscrito: false, credenciado: false, representantes: [] });
+      byInep.set(inep, {
+        inep,
+        gre: record.gre || "",
+        escola: record.escola || "",
+        inscrito: false,
+        credenciado: false,
+        representantes: [],
+      });
     }
     const item = byInep.get(inep);
+    if (!item.gre && record.gre) item.gre = record.gre;
+    if (!item.escola && record.escola) item.escola = record.escola;
     const inscrito = Boolean(record.inscrito);
     const credenciado = Boolean(record.credenciado);
     item.inscrito = item.inscrito || inscrito;
@@ -367,9 +376,9 @@ async function persistFormationRows(formation) {
       : [{ nome: "", matricula: "", inscrito: row.inscrito, credenciado: row.credenciado }];
     return people.map((person) => ({
       formacao_id: formation.id,
-      gre: school?.gre || "",
+      gre: row.gre || school?.gre || "",
       inep: String(row.inep || ""),
-      escola: school?.escola || "",
+      escola: row.escola || school?.escola || "",
       nome: person.nome || "",
       matricula: person.matricula || "",
       inscrito: Boolean(person.inscrito),
@@ -1871,6 +1880,8 @@ function parseFormationRows(rows) {
     if (!byInep.has(inep)) {
       byInep.set(inep, {
         inep,
+        gre: col(row, "gre"),
+        escola: col(row, "escola"),
         inscrito: false,
         credenciado: false,
         recurso_inscricao: normalize(col(row, "recursoinscricao", "recursoinscricoes")) === "realizado" ? "realizado" : "",
