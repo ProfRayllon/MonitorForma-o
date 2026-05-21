@@ -1561,7 +1561,7 @@ function renderFormationDetail() {
   $("#goalPanel").classList.toggle("hidden", !isAdmin);
   $("#regionalInsights").classList.toggle("hidden", isAdmin);
   if (isAdmin) renderGreBars(allRows);
-  if (!isAdmin) renderRegionalInsights(allRows, { inscritos, credenciados, naoCredenciados });
+  if (!isAdmin) renderRegionalInsights(allRows, { inscritos, naoInscritos, credenciados, naoCredenciados });
   renderPrazoRecursoRow(formation);
   updateSaveControls();
 
@@ -1664,19 +1664,53 @@ function renderFormationDetail() {
 
 function renderRegionalInsights(rows, summary) {
   const total = rows.length;
-  const percent = total ? Math.round((summary.credenciados / total) * 100) : 0;
-  const gaugeColor = percent >= 80 ? "var(--ok)" : percent >= 50 ? "var(--wait)" : "var(--danger)";
+  const updateGauge = ({ gauge, percentEl, summaryEl, hintEl, doneEl, pendingEl, done, pending, doneText, pendingText, completeText, pendingHint, colorVar }) => {
+    const percent = total ? Math.round((done / total) * 100) : 0;
+    const gaugeColor = percent >= 80 ? colorVar : percent >= 50 ? "var(--wait)" : "var(--danger)";
+    const schoolLabel = total === 1 ? "escola" : "escolas";
+    const doneSchoolLabel = done === 1 ? "escola" : "escolas";
+    const pendingSchoolLabel = pending === 1 ? "escola" : "escolas";
 
-  $("#credentialGauge").style.setProperty("--credential-color", gaugeColor);
-  $("#credentialGauge").style.background = `conic-gradient(${gaugeColor} 0 ${percent}%, rgba(255,255,255,0.08) ${percent}% 100%)`;
-  $("#credentialPercent").textContent = `${percent}%`;
-  $("#credentialSummary").textContent = `${summary.credenciados} de ${total} escolas credenciadas`;
-  $("#credentialHint").textContent =
-    summary.naoCredenciados > 0
-      ? `${summary.naoCredenciados} escolas ainda precisam concluir o credenciamento.`
-      : "Todas as escolas do recorte foram credenciadas.";
-  $("#credentialDoneLabel").textContent = `Credenciadas ${summary.credenciados} escolas`;
-  $("#credentialPendingLabel").textContent = `Pendentes ${summary.naoCredenciados} escolas`;
+    $(gauge).style.setProperty("--credential-color", gaugeColor);
+    $(gauge).style.background = `conic-gradient(${gaugeColor} 0 ${percent}%, rgba(255,255,255,0.08) ${percent}% 100%)`;
+    $(percentEl).textContent = `${percent}%`;
+    $(summaryEl).textContent = `${done} de ${total} ${schoolLabel} ${doneText}`;
+    $(hintEl).textContent = pending > 0 ? pendingHint(pending) : completeText;
+    $(doneEl).textContent = `${doneText[0].toUpperCase()}${doneText.slice(1)} ${done} ${doneSchoolLabel}`;
+    $(pendingEl).textContent = `${pendingText} ${pending} ${pendingSchoolLabel}`;
+  };
+
+  updateGauge({
+    gauge: "#inscriptionGauge",
+    percentEl: "#inscriptionPercent",
+    summaryEl: "#inscriptionSummary",
+    hintEl: "#inscriptionHint",
+    doneEl: "#inscriptionDoneLabel",
+    pendingEl: "#inscriptionPendingLabel",
+    done: summary.inscritos,
+    pending: summary.naoInscritos,
+    doneText: "inscritas",
+    pendingText: "Pendentes",
+    completeText: "Todas as escolas do recorte foram inscritas.",
+    pendingHint: (pending) => `${pending} ${pending === 1 ? "escola ainda precisa" : "escolas ainda precisam"} concluir a inscrição.`,
+    colorVar: "var(--ok)",
+  });
+
+  updateGauge({
+    gauge: "#credentialGauge",
+    percentEl: "#credentialPercent",
+    summaryEl: "#credentialSummary",
+    hintEl: "#credentialHint",
+    doneEl: "#credentialDoneLabel",
+    pendingEl: "#credentialPendingLabel",
+    done: summary.credenciados,
+    pending: summary.naoCredenciados,
+    doneText: "credenciadas",
+    pendingText: "Pendentes",
+    completeText: "Todas as escolas do recorte foram credenciadas.",
+    pendingHint: (pending) => `${pending} ${pending === 1 ? "escola ainda precisa" : "escolas ainda precisam"} concluir o credenciamento.`,
+    colorVar: "var(--ok)",
+  });
 }
 
 function renderSchoolResultCount(filteredCount, totalCount) {

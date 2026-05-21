@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=21" />
+    <link rel="stylesheet" href="styles.css?v=23" />
   </head>
   <body>
     <main id="app" class="app-shell">
@@ -317,27 +317,50 @@
 
                 <div class="metrics-grid" id="formationMetrics"></div>
 
-                <article class="panel regional-insights hidden" id="regionalInsights">
-                  <div class="panel-head compact-head">
-                    <div>
-                      <p class="eyebrow">Credenciamento</p>
-                      <h3>Panorama da regional</h3>
-                    </div>
-                  </div>
+                <article class="regional-insights hidden" id="regionalInsights">
                   <div class="regional-grid">
-                    <div class="credential-focus">
-                      <div class="credential-gauge" id="credentialGauge">
-                        <span id="credentialPercent">0%</span>
-                      </div>
-                      <div class="credential-copy">
-                        <strong id="credentialSummary">0 de 0 escolas credenciadas</strong>
-                        <p class="hint" id="credentialHint">Aguardando dados de credenciamento.</p>
-                        <div class="credential-stats">
-                          <span id="credentialDoneLabel">Credenciadas 0</span>
-                          <span id="credentialPendingLabel">Pendentes 0</span>
+                    <section class="panel regional-card">
+                      <div class="panel-head compact-head">
+                        <div>
+                          <p class="eyebrow">Inscrição</p>
+                          <h3>Panorama da regional</h3>
                         </div>
                       </div>
-                    </div>
+                      <div class="credential-focus">
+                        <div class="credential-gauge" id="inscriptionGauge">
+                          <span id="inscriptionPercent">0%</span>
+                        </div>
+                        <div class="credential-copy">
+                          <strong id="inscriptionSummary">0 de 0 escolas inscritas</strong>
+                          <p class="hint" id="inscriptionHint">Aguardando dados de inscrição.</p>
+                          <div class="credential-stats">
+                            <span id="inscriptionDoneLabel">Inscritas 0 escolas</span>
+                            <span id="inscriptionPendingLabel">Pendentes 0 escolas</span>
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+                    <section class="panel regional-card">
+                      <div class="panel-head compact-head">
+                        <div>
+                          <p class="eyebrow">Credenciamento</p>
+                          <h3>Panorama da regional</h3>
+                        </div>
+                      </div>
+                      <div class="credential-focus">
+                        <div class="credential-gauge" id="credentialGauge">
+                          <span id="credentialPercent">0%</span>
+                        </div>
+                        <div class="credential-copy">
+                          <strong id="credentialSummary">0 de 0 escolas credenciadas</strong>
+                          <p class="hint" id="credentialHint">Aguardando dados de credenciamento.</p>
+                          <div class="credential-stats">
+                            <span id="credentialDoneLabel">Credenciadas 0 escolas</span>
+                            <span id="credentialPendingLabel">Pendentes 0 escolas</span>
+                          </div>
+                        </div>
+                      </div>
+                    </section>
                   </div>
                 </article>
 
@@ -668,6 +691,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
-    <script src="app.js?v=20"></script>
+    <script src="app.js?v=22"></script>
   </body>
 </html>
