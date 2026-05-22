@@ -14,6 +14,7 @@ const state = {
   recursoTableMissing: false,
   dbLoadError: null,
   goalChartMode: "inscritos",
+  rewardBadgeFilter: null,
   users: [],
   formations: [],
   recursos: [],
@@ -1410,6 +1411,74 @@ function summarizeFormation(formation) {
   return { total, inscritos, credenciados, duplicadas };
 }
 
+function rewardLevel(scorePct, total) {
+  if (!total) return { label: "Aguardando dados", cls: "muted", color: "var(--muted)" };
+  if (scorePct >= 100) return { label: "Excelência", cls: "excellent", color: "var(--ok)" };
+  if (scorePct >= 90) return { label: "Diamante", cls: "diamond", color: "var(--accent)" };
+  if (scorePct >= 70) return { label: "Ouro", cls: "gold", color: "var(--wait)" };
+  if (scorePct >= 40) return { label: "Prata", cls: "silver", color: "var(--primary-2)" };
+  return { label: "Bronze", cls: "bronze", color: "var(--danger)" };
+}
+
+function calculateRewards(rows, name = "") {
+  const total = rows.length;
+  const inscritos = rows.filter((r) => r.inscrito).length;
+  const credenciados = rows.filter((r) => r.credenciado).length;
+  const inscricaoPct = total ? Math.round((inscritos / total) * 100) : 0;
+  const credenciamentoPct = total ? Math.round((credenciados / total) * 100) : 0;
+  const scorePct = total ? Math.round((inscricaoPct * 0.4) + (credenciamentoPct * 0.6)) : 0;
+  const points = scorePct;
+  const level = rewardLevel(scorePct, total);
+  const nextLevel = [
+    { threshold: 40, label: "Prata" },
+    { threshold: 70, label: "Ouro" },
+    { threshold: 90, label: "Diamante" },
+    { threshold: 100, label: "Excelência" },
+  ].find((item) => scorePct < item.threshold);
+  const nextHint = !total
+    ? "Importe uma base para liberar os reconhecimentos."
+    : nextLevel
+      ? `Faltam ${nextLevel.threshold - scorePct} pontos percentuais para chegar ao nível ${nextLevel.label}.`
+      : "Regional com reconhecimento máximo nesta formação.";
+
+  const badgeDefs = [
+    { ok: inscritos > 0, label: "Primeiro avanço", detail: "Primeira escola inscrita", tier: "Bronze", image: "assets/selos/selo-primeiro-avanco.gif", color: "#b87333" },
+    { ok: inscricaoPct >= 50, label: "Metade inscrita", detail: "50% das escolas inscritas", tier: "Bronze", image: "assets/selos/selo-metade-inscrita.gif", color: "#b87333" },
+    { ok: inscricaoPct >= 80, label: "Reta final", detail: "80% das escolas inscritas", tier: "Prata", image: "assets/selos/selo-reta-final.gif", color: "#9ca3af" },
+    { ok: inscricaoPct >= 100 && total > 0, label: "Inscrição concluída", detail: "100% das escolas inscritas", tier: "Ouro", image: "assets/selos/selo-inscricao-concluida.gif", color: "#fbbf24" },
+    { ok: credenciamentoPct >= 50, label: "Credenciamento em movimento", detail: "50% das escolas credenciadas", tier: "Prata", image: "assets/selos/selo-credenciamento-em-movimento.gif", color: "#9ca3af" },
+    { ok: credenciamentoPct >= 80, label: "Regional destaque", detail: "80% das escolas credenciadas", tier: "Ouro", image: "assets/selos/selo-regional-destaque.gif", color: "#fbbf24" },
+    { ok: credenciamentoPct >= 100 && total > 0, label: "Excelência regional", detail: "100% das escolas credenciadas", tier: "Diamante", image: "assets/selos/selo-excelencia-regional.gif", color: "#22d3ee" },
+  ];
+  const unlockedBadges = badgeDefs.filter((badge) => badge.ok);
+  const lastBadge = unlockedBadges.at(-1) || badgeDefs[0];
+
+  return {
+    name,
+    total,
+    inscritos,
+    credenciados,
+    inscricaoPct,
+    credenciamentoPct,
+    scorePct,
+    points,
+    level,
+    nextHint,
+    badges: badgeDefs,
+    unlockedCount: unlockedBadges.length,
+    lastBadge,
+  };
+}
+
+function rewardSealHtml(badge, className = "reward-seal-img") {
+  return `<span class="${className}-wrap">
+    <img class="${className}" src="${esc(badge.image)}" alt="Selo ${esc(badge.label)}" onerror="this.style.display='none';this.nextElementSibling.classList.remove('hidden')" />
+    <span class="${className}-fallback hidden">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/></svg>
+    </span>
+  </span>`;
+}
+
 function daysUntil(dateStr) {
   if (!dateStr) return null;
   const target = new Date(dateStr + "T00:00:00");
@@ -1425,7 +1494,9 @@ function renderFormationCards() {
   $("#formationCards").innerHTML = state.formations
     .filter((f) => f.id && f.nome)
     .map((formation) => {
+      const formationRows = getFormationRows(formation);
       const s = summarizeFormation(formation);
+      const reward = calculateRewards(formationRows, isAdmin ? "Geral" : (state.user?.gre || "Regional"));
       const pI = s.total ? Math.round((s.inscritos / s.total) * 100) : 0;
       const dPrazo = daysUntil(formation.prazoInscricoes);
       const dEvento = daysUntil(formation.dataEvento);
@@ -1447,6 +1518,9 @@ function renderFormationCards() {
           <div class="event-card-top">
             <span class="event-type">${esc(formation.publico)}</span>
             <span>Meta ${s.total.toLocaleString("pt-BR")}</span>
+          </div>
+          <div class="event-reward-stamp ${reward.lastBadge.ok ? "unlocked" : "locked"}" style="--reward-color:${reward.lastBadge.color}" title="${esc(`${reward.lastBadge.label} · ${reward.scorePct}% reconhecimento`)}">
+            ${rewardSealHtml(reward.lastBadge, "event-reward-img")}
           </div>
           <strong>${esc(formation.nome)}</strong>
           ${formation.lastImportedAt ? `<small class="event-updated">Base atualizada em ${esc(formatDateTime(formation.lastImportedAt))}</small>` : ""}
@@ -1516,6 +1590,179 @@ const METRIC_CONFIGS = [
   },
 ];
 
+function rewardBadgesHtml(summary) {
+  return summary.badges.map((badge, index) => `
+    <button class="reward-achievement ${badge.ok ? "unlocked" : "locked"}" type="button" ${badge.ok ? `data-reward-badge="${index}"` : "disabled"} style="--achievement-color:${badge.color}">
+      <span class="reward-achievement-medal" style="--achievement-color:${badge.color}">
+        ${rewardSealHtml(badge, "reward-achievement-img")}
+      </span>
+      <span class="reward-tier-tag">${esc(badge.tier)}</span>
+      <strong>${esc(badge.label)}</strong>
+    </button>
+  `).join("");
+}
+
+function rewardBadgeStatsByGre(rows) {
+  const grouped = new Map();
+  rows.forEach((row) => {
+    const gre = row.gre || "GRE não informada";
+    if (!grouped.has(gre)) grouped.set(gre, []);
+    grouped.get(gre).push(row);
+  });
+  const greSummaries = [...grouped.entries()].map(([gre, greRows]) => calculateRewards(greRows, gre));
+  const badgeDefs = calculateRewards(rows, "Geral").badges;
+  return badgeDefs.map((badge, index) => {
+    const achieved = greSummaries.filter((summary) => summary.badges[index]?.ok);
+    return {
+      ...badge,
+      index,
+      achievedCount: achieved.length,
+      totalGres: greSummaries.length,
+      percent: greSummaries.length ? Math.round((achieved.length / greSummaries.length) * 100) : 0,
+      greSet: new Set(achieved.map((summary) => summary.name)),
+    };
+  });
+}
+
+function adminRewardBadgesHtml(stats) {
+  return stats.map((badge) => `
+    <button class="admin-reward-badge ${state.rewardBadgeFilter === badge.index ? "active" : ""}" type="button" data-admin-reward-badge="${badge.index}" style="--achievement-color:${badge.color}">
+      <span class="admin-reward-img-box">${rewardSealHtml(badge, "admin-reward-img")}</span>
+      <span class="reward-tier-tag">${esc(badge.tier)}</span>
+      <strong>${esc(badge.label)}</strong>
+      <small>${esc(badge.detail)}</small>
+      <span class="admin-reward-percent">${badge.percent}%</span>
+      <span class="admin-reward-count">${badge.achievedCount} de ${badge.totalGres} GREs</span>
+    </button>
+  `).join("");
+}
+
+function updateRewardHero(panel, summary, badge) {
+  panel.style.setProperty("--reward-color", badge.color);
+  const hero = panel.querySelector(".reward-hero");
+  if (hero) hero.style.setProperty("--reward-color", badge.color);
+  const medal = panel.querySelector(".reward-medal");
+  const title = panel.querySelector(".reward-current-title");
+  const detail = panel.querySelector(".reward-current-detail");
+  const meta = panel.querySelector(".reward-current-meta");
+  if (medal) medal.innerHTML = rewardSealHtml(badge);
+  if (title) title.textContent = badge.label;
+  if (detail) detail.textContent = badge.detail;
+  if (meta) meta.textContent = `${summary.unlockedCount} de ${summary.badges.length} selos liberados em ${summary.name} · nível ${summary.level.label}.`;
+  panel.querySelectorAll("[data-reward-badge]").forEach((button) => {
+    button.classList.toggle("active", Number(button.dataset.rewardBadge) === summary.badges.indexOf(badge));
+  });
+}
+
+function bindRewardRules(panel) {
+  const button = panel.querySelector("[data-toggle-reward-rules]");
+  const rules = panel.querySelector(".reward-rules");
+  if (!button || !rules) return;
+  button.addEventListener("click", () => {
+    const hidden = rules.classList.toggle("hidden");
+    button.setAttribute("aria-expanded", String(!hidden));
+  });
+}
+
+function bindRewardBadges(panel, summary) {
+  panel.querySelectorAll("[data-reward-badge]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const badge = summary.badges[Number(button.dataset.rewardBadge)];
+      if (!badge?.ok) return;
+      updateRewardHero(panel, summary, badge);
+    });
+  });
+}
+
+function bindAdminRewardBadges(panel) {
+  panel.querySelectorAll("[data-admin-reward-badge]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const index = Number(button.dataset.adminRewardBadge);
+      state.rewardBadgeFilter = state.rewardBadgeFilter === index ? null : index;
+      renderFormationDetail();
+      $("#goalPanel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+}
+
+function renderRewardPanel(rows, isAdmin) {
+  const panel = $("#rewardPanel");
+  if (!panel) return;
+  panel.classList.remove("hidden");
+
+  if (isAdmin) {
+    panel.style.removeProperty("--reward-color");
+    const stats = rewardBadgeStatsByGre(rows);
+    if (state.rewardBadgeFilter !== null && !stats.some((badge) => badge.index === state.rewardBadgeFilter)) {
+      state.rewardBadgeFilter = null;
+    }
+    const activeBadge = stats.find((badge) => badge.index === state.rewardBadgeFilter);
+
+    panel.innerHTML = `
+      <div class="panel-head compact-head">
+        <div>
+          <p class="eyebrow">Reconhecimento</p>
+          <h3>Selos por GRE</h3>
+        </div>
+        <div class="reward-head-actions">
+          <span class="reward-mode">${activeBadge ? `Filtro no gráfico: ${esc(activeBadge.label)}` : "Clique em um selo para filtrar o gráfico por GRE"}</span>
+          <button class="reward-help-btn" type="button" data-toggle-reward-rules aria-expanded="false" title="Ver regras">?</button>
+        </div>
+      </div>
+      <div class="reward-rules hidden">
+        <strong>Regras de reconhecimento</strong>
+        <p>Cada selo é calculado por percentual da GRE. Ao clicar em um selo, o gráfico abaixo mostra apenas as gerências que alcançaram aquela conquista.</p>
+      </div>
+      <div class="admin-reward-grid">
+        ${stats.length ? adminRewardBadgesHtml(stats) : `<p class="muted">Nenhuma GRE com dados nesta formação.</p>`}
+      </div>
+    `;
+    bindRewardRules(panel);
+    bindAdminRewardBadges(panel);
+    return;
+  }
+
+  const summary = calculateRewards(rows, state.user?.gre || "Regional");
+  const selectedBadge = summary.lastBadge;
+  panel.style.setProperty("--reward-color", selectedBadge.color);
+  panel.innerHTML = `
+    <div class="reward-help-row">
+      <button class="reward-help-btn" type="button" data-toggle-reward-rules aria-expanded="false" title="Ver regras de pontuação">?</button>
+    </div>
+    <div class="reward-rules hidden">
+      <strong>Regras de reconhecimento</strong>
+      <p>A pontuação vai de 0 a 100 pontos percentuais: inscrição vale 40% e credenciamento vale 60%. Os selos abaixo aparecem como conquistas desbloqueadas ou em andamento.</p>
+    </div>
+    <div class="reward-hero ${summary.level.cls}" style="--reward-color:${selectedBadge.color}">
+      <div class="reward-medal">
+        ${rewardSealHtml(selectedBadge)}
+      </div>
+      <div class="reward-copy">
+        <p class="eyebrow">Reconhecimento da regional</p>
+        <h3 class="reward-current-title">${esc(selectedBadge.label)}</h3>
+        <p class="reward-current-detail">${esc(selectedBadge.detail)}</p>
+        <small class="reward-current-meta">${summary.unlockedCount} de ${summary.badges.length} selos liberados em ${esc(summary.name)} · nível ${esc(summary.level.label)}.</small>
+      </div>
+      <div class="reward-score">
+        <strong>${summary.scorePct}%</strong>
+        <span>progresso geral</span>
+      </div>
+    </div>
+    <div class="reward-progress-wrap">
+      <div class="reward-progress-head">
+        <span>Inscrição ${summary.inscricaoPct}%</span>
+        <span>Credenciamento ${summary.credenciamentoPct}%</span>
+      </div>
+      <div class="reward-progress"><span style="width:${summary.scorePct}%;background:${summary.level.color}"></span></div>
+      <small>${esc(summary.nextHint)}</small>
+    </div>
+    <div class="reward-badges">${rewardBadgesHtml(summary)}</div>
+  `;
+  bindRewardRules(panel);
+  bindRewardBadges(panel, summary);
+  updateRewardHero(panel, summary, selectedBadge);
+}
+
 function renderFormationDetail() {
   const formation = getFormation();
   if (!formation || state.formationMode !== "directors") return;
@@ -1560,6 +1807,7 @@ function renderFormationDetail() {
 
   $("#goalPanel").classList.toggle("hidden", !isAdmin);
   $("#regionalInsights").classList.toggle("hidden", isAdmin);
+  renderRewardPanel(allRows, isAdmin);
   if (isAdmin) renderGreBars(allRows);
   if (!isAdmin) renderRegionalInsights(allRows, { inscritos, naoInscritos, credenciados, naoCredenciados });
   renderPrazoRecursoRow(formation);
@@ -2061,6 +2309,11 @@ function downloadFilteredPdf() {
 function renderGreBars(rows) {
   const mode = state.goalChartMode === "credenciados" ? "credenciados" : "inscritos";
   const modeLabel = mode === "credenciados" ? "Credenciadas" : "Inscritas";
+  let activeRewardBadge = null;
+  if (state.user?.perfil === "admin" && state.rewardBadgeFilter !== null) {
+    activeRewardBadge = rewardBadgeStatsByGre(rows).find((badge) => badge.index === state.rewardBadgeFilter) || null;
+    if (activeRewardBadge) rows = rows.filter((row) => activeRewardBadge.greSet.has(row.gre || "GRE não informada"));
+  }
   const byGre = new Map();
   rows.forEach((row) => {
     if (!byGre.has(row.gre)) byGre.set(row.gre, { total: 0, inscritos: 0, credenciados: 0 });
@@ -2093,7 +2346,9 @@ function renderGreBars(rows) {
   const overallTotal = entries.reduce((s, e) => s + e.total, 0);
   const overallPercent = overallTotal ? Math.round((overallValue / overallTotal) * 100) : 0;
 
-  $("#goalChartTitle").textContent = `${modeLabel} por GRE`;
+  $("#goalChartTitle").textContent = activeRewardBadge
+    ? `${modeLabel} por GRE · ${activeRewardBadge.label}`
+    : `${modeLabel} por GRE`;
   $$("[data-goal-mode]").forEach((b) => b.classList.toggle("active", b.dataset.goalMode === mode));
 
   $("#greBars").innerHTML = entries
@@ -2125,9 +2380,17 @@ function renderGreBars(rows) {
     });
   });
 
-  $("#goalBarLegend").innerHTML = ranges
-    .map((r) => `<span><i style="background:${r.color};border-radius:3px"></i>${r.label}</span>`)
-    .join("");
+  $("#goalBarLegend").innerHTML = [
+    activeRewardBadge
+      ? `<button class="goal-filter-chip" type="button" id="clearRewardBadgeFilter">Filtro: ${esc(activeRewardBadge.label)} · ${activeRewardBadge.achievedCount}/${activeRewardBadge.totalGres} GREs</button>`
+      : "",
+    ...ranges.map((r) => `<span><i style="background:${r.color};border-radius:3px"></i>${r.label}</span>`),
+  ].join("");
+
+  on("#clearRewardBadgeFilter", "click", () => {
+    state.rewardBadgeFilter = null;
+    renderFormationDetail();
+  });
 
   renderGrePie({ percent: overallPercent, value: overallValue, total: overallTotal, modeLabel, range: rangeFor(overallPercent) });
 }
