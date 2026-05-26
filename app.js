@@ -74,6 +74,10 @@ const makeId = () =>
 const isUuid = (value) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ""));
 
+function hasAdminAccess() {
+  return state.user?.perfil === "admin" || state.user?.perfil === "intermediario";
+}
+
 const TRILHA_COLORS = {
   "Trilha Institucional":           { bg: "rgba(139,92,246,0.15)",  border: "rgba(139,92,246,0.4)",  color: "#c4b5fd" },
   "Educação Socioemocional":        { bg: "rgba(236,72,153,0.15)",  border: "rgba(236,72,153,0.4)",  color: "#f9a8d4" },
@@ -539,7 +543,7 @@ function formatDate(value) {
   return `${d}/${m}/${y}`;
 }
 
-function renderImportTimestamp(formation, isAdmin = state.user?.perfil === "admin") {
+function renderImportTimestamp(formation, isAdmin = hasAdminAccess()) {
   const importTimestamp = $("#formationImportTimestamp");
   if (!importTimestamp) return;
   const label = formatDateTime(formation?.lastImportedAt);
@@ -895,7 +899,7 @@ function restoreSession() {
   );
   if (!user) { localStorage.removeItem(SESSION_KEY); return false; }
   state.user = user;
-  state.tab = user.perfil === "admin" ? "home" : "formation";
+  state.tab = (user.perfil === "admin" || user.perfil === "intermediario") ? "home" : "formation";
   document.querySelector('[data-view="login"]').classList.add("hidden");
   document.querySelector('[data-view="dashboard"]').classList.remove("hidden");
   render();
@@ -940,7 +944,7 @@ function handleLogin(event) {
   }
 
   state.user = user;
-  state.tab = user.perfil === "admin" ? "home" : "formation";
+  state.tab = (user.perfil === "admin" || user.perfil === "intermediario") ? "home" : "formation";
   saveStored(SESSION_KEY, { id: user.id, email: user.email });
   $("#loginError").textContent = "";
   document.querySelector('[data-view="login"]').classList.add("hidden");
@@ -977,8 +981,9 @@ function render() {
 }
 
 function renderShell() {
-  const isAdmin = state.user?.perfil === "admin";
-  $("#userScope").textContent = isAdmin ? "Administrador geral" : state.user?.gre || "";
+  const isAdmin = hasAdminAccess();
+  const perfil = state.user?.perfil;
+  $("#userScope").textContent = perfil === "admin" ? "Administrador geral" : perfil === "intermediario" ? "Intermediário" : state.user?.gre || "";
   $("#profileLabel").textContent =
     state.tab === "users" ? "Administrativo" :
     state.tab === "home" ? "Painel geral" :
@@ -997,13 +1002,15 @@ function renderShell() {
 function renderSidebarUser() {
   const el = $("#sidebarUser");
   if (!el || !state.user) return;
-  const isAdmin = state.user.perfil === "admin";
+  const perfil = state.user.perfil;
+  const badgeClass = perfil === "admin" ? "admin" : perfil === "intermediario" ? "intermediario" : "regional";
+  const badgeText = perfil === "admin" ? "Administrador" : perfil === "intermediario" ? "Intermediário" : "Regional";
   el.innerHTML = `
     <div class="sidebar-user-inner">
       <div class="user-avatar">${esc(userInitials(state.user.nome))}</div>
       <div class="user-meta">
         <strong>${esc(state.user.nome)}</strong>
-        <small><span class="role-badge ${isAdmin ? "admin" : "regional"}">${isAdmin ? "Administrador" : "Regional"}</span></small>
+        <small><span class="role-badge ${badgeClass}">${badgeText}</span></small>
       </div>
     </div>
   `;
@@ -1012,11 +1019,12 @@ function renderSidebarUser() {
 function renderTopbarUser() {
   const el = $("#topbarUserWrap");
   if (!el || !state.user) return;
-  const isAdmin = state.user.perfil === "admin";
+  const perfil = state.user.perfil;
+  const scopeText = perfil === "admin" ? "Administrador geral" : perfil === "intermediario" ? "Intermediário" : esc(state.user.gre);
   el.innerHTML = `
     <div class="topbar-user-info">
       <strong>${esc(state.user.nome)}</strong>
-      <small>${isAdmin ? "Administrador geral" : esc(state.user.gre)}</small>
+      <small>${scopeText}</small>
     </div>
     <div class="user-avatar">${esc(userInitials(state.user.nome))}</div>
   `;
@@ -1035,7 +1043,7 @@ function renderTopbarUser() {
 }
 
 function renderTabs() {
-  const isAdmin = state.user?.perfil === "admin";
+  const isAdmin = hasAdminAccess();
   if (!isAdmin && (state.tab === "users" || state.tab === "home")) state.tab = "formation";
   $$(".nav-item").forEach((b) => b.classList.toggle("active", b.dataset.tab === state.tab));
   $$(".tab-panel").forEach((p) => p.classList.toggle("hidden", p.dataset.panel !== state.tab));
@@ -1219,14 +1227,16 @@ function renderProfile() {
   if (state.tab !== "profile" || !state.user) return;
 
   if (el) {
-    const isAdmin = state.user.perfil === "admin";
+    const perfil = state.user.perfil;
+    const badgeClass = perfil === "admin" ? "admin" : perfil === "intermediario" ? "intermediario" : "regional";
+    const badgeText = perfil === "admin" ? "Administrador" : perfil === "intermediario" ? "Intermediário" : "Regional";
     el.innerHTML = `
       <div class="user-avatar-lg">${esc(userInitials(state.user.nome))}</div>
       <div class="profile-avatar-info">
         <strong>${esc(state.user.nome)}</strong>
         <small>${esc(state.user.email)}</small>
         <div style="margin-top:10px">
-          <span class="role-badge ${isAdmin ? "admin" : "regional"}">${isAdmin ? "Administrador" : "Regional"}</span>
+          <span class="role-badge ${badgeClass}">${badgeText}</span>
         </div>
       </div>
     `;
@@ -1238,12 +1248,13 @@ function renderProfile() {
   if (profileEmail) profileEmail.value = state.user.email || "";
 
   if (infoEl) {
-    const isAdmin = state.user.perfil === "admin";
+    const perfil = state.user.perfil;
+    const perfilLabel = perfil === "admin" ? "Administrador geral" : perfil === "intermediario" ? "Intermediário" : "Regional";
     const items = [
       {
         icon: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
         label: "Perfil de acesso",
-        value: isAdmin ? "Administrador geral" : "Regional",
+        value: perfilLabel,
       },
       {
         icon: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
@@ -1429,7 +1440,7 @@ function showAdminFormationView(view) {
 
 
 function renderFormationMode() {
-  const isAdmin = state.user?.perfil === "admin";
+  const isAdmin = hasAdminAccess();
   const showForm = isAdmin && state.adminFormationView === "form" && !state.selectedFormationId;
   const showTeacherForm = isAdmin && state.teacherAdminFormView === "form" && state.formationMode === "teachers-list";
   const showCourseForm = isAdmin && state.courseAdminFormView === "form" && state.formationMode === "courses";
@@ -1686,7 +1697,7 @@ function readImageFile(file) {
 
 function scopedSchools() {
   // Mantido para compatibilidade com funções que ainda usam base.json
-  if (state.user?.perfil === "admin") return state.base.schools;
+  if (hasAdminAccess()) return state.base.schools;
   return state.base.schools.filter((s) => s.gre === state.user.gre);
 }
 
@@ -1697,7 +1708,7 @@ function getFormation() {
 function getFormationRows(formation = getFormation()) {
   if (!formation) return [];
   const recursoMap = formation.recursoMap || new Map();
-  const isAdmin = state.user?.perfil === "admin";
+  const isAdmin = hasAdminAccess();
   const userGre = state.user?.gre;
 
   // Usa os dados importados como fonte primária — não filtra pelo base.json
@@ -1820,7 +1831,7 @@ function daysUntil(dateStr) {
 
 function renderFormationCards() {
   if (state.formationMode !== "directors") return;
-  const isAdmin = state.user?.perfil === "admin";
+  const isAdmin = hasAdminAccess();
   $("#formationCards").innerHTML = state.formations
     .filter((f) => f.id && f.nome && !normalize(f.publico || "").includes("professor"))
     .map((formation) => {
@@ -2097,7 +2108,7 @@ function renderFormationDetail() {
   const formation = getFormation();
   if (!formation || state.formationMode !== "directors") return;
 
-  const isAdmin = state.user?.perfil === "admin";
+  const isAdmin = hasAdminAccess();
   const allRows = getFormationRows(formation);
   if (isAdmin) syncGreFilterOptions(allRows);
   const rows = filteredRows(allRows);
@@ -2318,7 +2329,7 @@ function syncGreFilterOptions(rows) {
 function filteredRows(rows) {
   const query = normalize($("#schoolSearch")?.value || "");
   const status = $("#statusFilter")?.value || "todos";
-  const gre = state.user?.perfil === "admin" ? ($("#greFilter")?.value || "todos") : "todos";
+  const gre = hasAdminAccess() ? ($("#greFilter")?.value || "todos") : "todos";
   const recursoF = $("#recursoFilter")?.value || "todos";
   const resultadoF = $("#resultadoFilter")?.value || "todos";
   return rows.filter((row) => {
@@ -2640,7 +2651,7 @@ function renderGreBars(rows) {
   const mode = state.goalChartMode === "credenciados" ? "credenciados" : "inscritos";
   const modeLabel = mode === "credenciados" ? "Credenciadas" : "Inscritas";
   let activeRewardBadge = null;
-  if (state.user?.perfil === "admin" && state.rewardBadgeFilter !== null) {
+  if (hasAdminAccess() && state.rewardBadgeFilter !== null) {
     activeRewardBadge = rewardBadgeStatsByGre(rows).find((badge) => badge.index === state.rewardBadgeFilter) || null;
     if (activeRewardBadge) rows = rows.filter((row) => activeRewardBadge.greSet.has(row.gre || "GRE não informada"));
   }
@@ -2944,7 +2955,7 @@ async function submitAddUser(event) {
 }
 
 function renderUsers() {
-  if (state.tab !== "users" || state.user?.perfil !== "admin") return;
+  if (state.tab !== "users" || !hasAdminAccess()) return;
   const gres = ["TODAS", ...getGres()];
   $("#usersTable").innerHTML = state.users
     .map(
@@ -2963,6 +2974,7 @@ function renderUsers() {
         <td>
           <select data-user="${index}" data-field="perfil">
             <option value="admin" ${user.perfil === "admin" ? "selected" : ""}>Admin</option>
+            <option value="intermediario" ${user.perfil === "intermediario" ? "selected" : ""}>Intermediário</option>
             <option value="regional" ${user.perfil === "regional" ? "selected" : ""}>Regional</option>
           </select>
         </td>
@@ -3251,7 +3263,7 @@ async function importTeacherCsv(file) {
 }
 
 function getTeacherSchoolRows() {
-  const isAdmin = state.user?.perfil === "admin";
+  const isAdmin = hasAdminAccess();
   const userGre = state.user?.gre;
   const schoolByInep = new Map();
   (state.base?.schools || []).forEach((s) => schoolByInep.set(String(s.inep), s));
@@ -3291,7 +3303,7 @@ function getTeacherSchoolRows() {
 }
 
 function filteredTeacherPersonRows() {
-  const isAdmin = state.user?.perfil === "admin";
+  const isAdmin = hasAdminAccess();
   const userGre = state.user?.gre;
   const q = normalize(state.teachersSearch || "");
   const greF = state.teachersGreFilter;
@@ -3330,7 +3342,7 @@ function filteredTeacherSchoolRows() {
 function renderCoursesList() {
   const container = $("#courseCards");
   if (!container || state.formationMode !== "courses") return;
-  const isAdmin = state.user?.perfil === "admin";
+  const isAdmin = hasAdminAccess();
   const formacaoId = state.teacherFormationId;
   const formation = state.formations.find((f) => f.id === formacaoId);
   const nameEl = $("#coursesFormationName");
@@ -3469,7 +3481,7 @@ function confirmDeleteCourse(id) {
 function renderTeacherListCards() {
   const container = $("#teacherFormationCards");
   if (!container || state.formationMode !== "teachers-list") return;
-  const isAdmin = state.user?.perfil === "admin";
+  const isAdmin = hasAdminAccess();
   const formations = state.formations.filter((f) => f.id && f.nome && normalize(f.publico || "").includes("professor"));
   const schools = state.base?.schools || [];
   const userGre = state.user?.gre;
@@ -3526,7 +3538,7 @@ function renderTeacherListCards() {
 function renderTeachersArea() {
   if (state.formationMode !== "teachers") return;
 
-  const isAdmin = state.user?.perfil === "admin";
+  const isAdmin = hasAdminAccess();
   // Update header to show course name when a course is selected
   const currentCourse = state.selectedCourseId ? state.courses.find((c) => c.id === state.selectedCourseId) : null;
   const headerNameEl = $("#teacherFormationName");
