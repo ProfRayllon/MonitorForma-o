@@ -1447,6 +1447,8 @@ option { color: #111; background: #fff; }
 .metric-wait strong { color: var(--wait); }
 .metric-wait:hover { border-color: rgba(245, 158, 11, 0.45); }
 
+.metric-sub { font-size: 0.65em; font-weight: 500; opacity: 0.5; margin-left: 5px; letter-spacing: 0; }
+
 /* ─── REGIONAL INSIGHTS ─────────────────────────────────────────────────── */
 .regional-insights { margin-bottom: 14px; }
 .regional-grid {
