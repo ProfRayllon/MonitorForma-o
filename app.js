@@ -29,6 +29,9 @@ const state = {
   selectedCourseId: null,
   courseAdminFormView: "list",
   editingCourseId: null,
+  dashboardGreFilter: "todos",
+  dashboardCourseFilter: "todos",
+  dashboardSchoolSearch: "",
 };
 
 const SUPABASE_URL = "https://intswvnfmizbttlrqhdt.supabase.co";
@@ -847,6 +850,15 @@ function bindEvents() {
   $$("[data-back-home]").forEach((b) => b.addEventListener("click", showFormationHome));
   on("#teachersBackBtn", "click", backFromTeachers);
   on("#backToTeachersListBtn", "click", showTeachersArea);
+  on("#insertDataBtn", "click", openTeacherInsert);
+  on("#dashboardBtn", "click", openTeacherDashboard);
+  on("#backFromInsertBtn", "click", backToCourses);
+  on("#backFromDashboardBtn", "click", backToCourses);
+  on("#exportDashboardXlsx", "click", exportDashboardXlsx);
+  on("#exportDashboardPdf", "click", () => window.print());
+  on("#dashFilterGre", "change", () => { state.dashboardGreFilter = $("#dashFilterGre")?.value || "todos"; renderTeacherDashboard(); });
+  on("#dashFilterCourse", "change", () => { state.dashboardCourseFilter = $("#dashFilterCourse")?.value || "todos"; renderTeacherDashboard(); });
+  on("#dashSchoolSearch", "input", () => { state.dashboardSchoolSearch = $("#dashSchoolSearch")?.value || ""; renderDashboardSchoolTable(); });
   on("#addCourseBtn", "click", startNewCourse);
   on("#courseFormEl", "submit", saveCourse);
   on("#cancelCourseFormBtn", "click", () => {
@@ -973,6 +985,8 @@ function render() {
   renderFormationCards();
   renderTeacherListCards();
   renderCoursesList();
+  renderTeacherInsert();
+  renderTeacherDashboard();
   renderFormationDetail();
   renderTeachersArea();
   renderUsers();
@@ -1451,6 +1465,8 @@ function renderFormationMode() {
   $("#formationHome").classList.toggle("hidden", state.formationMode !== "home");
   $("#teachersListArea").classList.toggle("hidden", state.formationMode !== "teachers-list");
   $("#coursesArea").classList.toggle("hidden", state.formationMode !== "courses");
+  $("#teacherInsertArea").classList.toggle("hidden", state.formationMode !== "teacher-insert");
+  $("#teacherDashboardArea").classList.toggle("hidden", state.formationMode !== "teacher-dashboard");
   $("#teachersArea").classList.toggle("hidden", state.formationMode !== "teachers");
   $("#directorsArea").classList.toggle("hidden", state.formationMode !== "directors");
   $("#formationDetail").classList.toggle("hidden", !state.selectedFormationId);
@@ -3341,6 +3357,295 @@ function filteredTeacherSchoolRows() {
     }
     return true;
   });
+}
+
+function backToCourses() {
+  state.formationMode = "courses";
+  state.selectedCourseId = null;
+  render();
+  renderCoursesList();
+}
+
+function openTeacherInsert() {
+  state.formationMode = "teacher-insert";
+  render();
+}
+
+function openTeacherDashboard() {
+  state.formationMode = "teacher-dashboard";
+  state.dashboardGreFilter = "todos";
+  state.dashboardCourseFilter = "todos";
+  state.dashboardSchoolSearch = "";
+  render();
+}
+
+function renderTeacherInsert() {
+  const container = $("#insertCourseCards");
+  if (!container || state.formationMode !== "teacher-insert") return;
+  const formacaoId = state.teacherFormationId;
+  const formation = state.formations.find((f) => f.id === formacaoId);
+  const titleEl = $("#insertAreaTitle");
+  if (titleEl) titleEl.textContent = formation?.nome || "Inserir dados";
+  const courses = state.courses.filter((c) => c.formacaoId === formacaoId);
+  const iconClock = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
+  container.innerHTML = courses.map((c) => {
+    const rows = state.teacherRows.filter((r) => r.cursoId === c.id);
+    const inscritos = rows.length;
+    const concluidos = rows.filter((r) => r.resultado === "Concluído").length;
+    const trilhaStyle = c.trilha ? TRILHA_COLORS[c.trilha] : null;
+    const trilhaTag = trilhaStyle ? `<span class="formation-tag" style="background:${trilhaStyle.bg};border-color:${trilhaStyle.border};color:${trilhaStyle.color}">${esc(c.trilha)}</span>` : "";
+    const cargaTag = c.cargaHoraria ? `<span class="formation-tag">${iconClock}${esc(c.cargaHoraria)}</span>` : "";
+    const allTags = [cargaTag, trilhaTag].filter(Boolean).join("");
+    return `
+      <article class="event-card">
+        ${c.foto ? `<img class="event-photo" src="${esc(c.foto)}" alt="" />` : ""}
+        <div class="event-card-top"><span class="event-type">Curso</span></div>
+        <strong>${esc(c.nome)}</strong>
+        ${allTags ? `<div class="formation-tags">${allTags}</div>` : ""}
+        <small>${inscritos.toLocaleString("pt-BR")} inscritos · ${concluidos.toLocaleString("pt-BR")} concluídos</small>
+        <div class="card-actions">
+          <button class="mini-button" data-import-course="${esc(c.id)}">Importar dados</button>
+        </div>
+      </article>`;
+  }).join("") || `<p class="muted" style="padding:24px">Nenhum curso cadastrado.</p>`;
+  container.querySelectorAll("[data-import-course]").forEach((b) => {
+    b.addEventListener("click", () => {
+      state.selectedCourseId = b.dataset.importCourse;
+      state.formationMode = "teachers";
+      render();
+      renderTeachersArea();
+      setTimeout(() => $("#importTeacherInput")?.click(), 120);
+    });
+  });
+}
+
+// ─── DASHBOARD ───────────────────────────────────────────────────────────────
+
+function getDashboardRows() {
+  const isAdmin = hasAdminAccess();
+  const userGre = state.user?.gre;
+  const formacaoId = state.teacherFormationId;
+  const allFormationCourses = state.courses.filter((c) => c.formacaoId === formacaoId);
+  const filteredCourses = state.dashboardCourseFilter !== "todos"
+    ? allFormationCourses.filter((c) => c.id === state.dashboardCourseFilter)
+    : allFormationCourses;
+  const courseIdSet = new Set(filteredCourses.map((c) => c.id));
+  let rows = state.teacherRows.filter((r) => courseIdSet.has(r.cursoId));
+  if (!isAdmin) rows = rows.filter((r) => r.gre === userGre);
+  else if (state.dashboardGreFilter !== "todos") rows = rows.filter((r) => r.gre === state.dashboardGreFilter);
+  return { rows, allFormationCourses, filteredCourses };
+}
+
+function renderTeacherDashboard() {
+  if (state.formationMode !== "teacher-dashboard") return;
+  const isAdmin = hasAdminAccess();
+  const formacaoId = state.teacherFormationId;
+  const formation = state.formations.find((f) => f.id === formacaoId);
+  const nameEl = $("#dashboardFormationName");
+  if (nameEl) nameEl.textContent = formation?.nome || "Dashboard";
+
+  const allFormationCourses = state.courses.filter((c) => c.formacaoId === formacaoId);
+
+  // Populate GRE filter
+  const greSelect = $("#dashFilterGre");
+  if (greSelect) {
+    if (!isAdmin) {
+      greSelect.closest(".dash-filter-row")?.classList.add("hidden");
+    } else {
+      const courseIds = new Set(allFormationCourses.map((c) => c.id));
+      const gres = [...new Set(state.teacherRows.filter((r) => courseIds.has(r.cursoId)).map((r) => r.gre).filter(Boolean))]
+        .sort((a, b) => getGreNumber(a) - getGreNumber(b));
+      const prev = state.dashboardGreFilter;
+      greSelect.innerHTML = `<option value="todos">Todas as GREs</option>` +
+        gres.map((g) => `<option value="${esc(g)}">${esc(g)}</option>`).join("");
+      greSelect.value = gres.includes(prev) ? prev : "todos";
+    }
+  }
+
+  // Populate course filter
+  const courseSelect = $("#dashFilterCourse");
+  if (courseSelect) {
+    const prev = state.dashboardCourseFilter;
+    courseSelect.innerHTML = `<option value="todos">Todos os cursos</option>` +
+      allFormationCourses.map((c) => `<option value="${esc(c.id)}">${esc(c.nome)}</option>`).join("");
+    courseSelect.value = allFormationCourses.some((c) => c.id === prev) ? prev : "todos";
+  }
+
+  const { rows, filteredCourses } = getDashboardRows();
+
+  // KPIs
+  const total = rows.length;
+  const concluidos = rows.filter((r) => r.resultado === "Concluído").length;
+  const emAndamento = rows.filter((r) => r.resultado === "Em andamento").length;
+  const naoIniciados = rows.filter((r) => !r.resultado || r.resultado === "Não iniciado").length;
+  const pct = total > 0 ? Math.round((concluidos / total) * 100) : 0;
+  const pctNao = total > 0 ? Math.round((naoIniciados / total) * 100) : 0;
+  const metricsEl = $("#dashboardMetrics");
+  if (metricsEl) {
+    const kpis = [
+      { label: "Inscritos", value: total.toLocaleString("pt-BR"), v: "metric-accent" },
+      { label: "Concluídos", value: concluidos.toLocaleString("pt-BR"), v: "metric-ok" },
+      { label: "Em andamento", value: emAndamento.toLocaleString("pt-BR"), v: "metric-wait" },
+      { label: "Não iniciados", value: naoIniciados.toLocaleString("pt-BR"), sub: `${pctNao}%`, v: "metric-danger" },
+      { label: "Taxa de conclusão", value: `${pct}%`, v: "metric-ok" },
+    ];
+    metricsEl.innerHTML = kpis.map((k) => `
+      <div class="metric panel ${k.v}">
+        <span>${k.label}</span>
+        <strong>${k.value}${k.sub ? `<small class="metric-sub">${k.sub}</small>` : ""}</strong>
+      </div>`).join("");
+  }
+
+  renderDashboardGreBars(rows);
+  renderDashboardCourseTable(filteredCourses, rows);
+  renderDashboardSchoolTable(rows);
+}
+
+function renderDashboardGreBars(rows) {
+  const byGre = new Map();
+  rows.forEach((r) => {
+    if (!byGre.has(r.gre)) byGre.set(r.gre, { total: 0, concluidos: 0 });
+    const e = byGre.get(r.gre);
+    e.total++;
+    if (r.resultado === "Concluído") e.concluidos++;
+  });
+  const ranges = [
+    { key: "high",    color: "#22c55e", label: "90% ou mais",   test: (v) => v >= 90 },
+    { key: "midHigh", color: "#38bdf8", label: "50% a 89%",     test: (v) => v >= 50 },
+    { key: "midLow",  color: "#f59e0b", label: "30% a 49%",     test: (v) => v >= 30 },
+    { key: "low",     color: "#ef4444", label: "Abaixo de 30%", test: (v) => v < 30 },
+  ];
+  const rangeFor = (v) => ranges.find((r) => r.test(v)) || ranges.at(-1);
+  const entries = [...byGre.entries()]
+    .filter(([g]) => g && /\d/.test(g))
+    .map(([g, d]) => ({ gre: g, total: d.total, concluidos: d.concluidos, pct: d.total > 0 ? Math.round((d.concluidos / d.total) * 100) : 0 }))
+    .sort((a, b) => getGreNumber(a.gre) - getGreNumber(b.gre));
+  const maxPct = Math.max(100, ...entries.map((e) => e.pct));
+  const totalC = entries.reduce((s, e) => s + e.concluidos, 0);
+  const totalT = entries.reduce((s, e) => s + e.total, 0);
+  const overall = totalT > 0 ? Math.round((totalC / totalT) * 100) : 0;
+  const barsEl = $("#dashboardGreBars");
+  if (barsEl) {
+    barsEl.innerHTML = entries.map((e) => {
+      const range = rangeFor(e.pct);
+      const h = Math.max(4, Math.round((e.pct / maxPct) * 100));
+      return `<button class="goal-bar goal-${range.key}" title="${esc(`${e.gre}: ${e.concluidos}/${e.total} (${e.pct}%)`)}">
+        <span class="goal-fill" style="height:${h}%" data-pct="${e.pct}%">
+          <span class="goal-count">${e.concluidos}/${e.total}</span>
+        </span>
+        <span class="goal-label">${esc(e.gre.replace(" GRE", ""))}<small>GRE</small></span>
+      </button>`;
+    }).join("");
+  }
+  const legendEl = $("#dashboardGreLegend");
+  if (legendEl) legendEl.innerHTML = ranges.map((r) => `<span><i style="background:${r.color};border-radius:3px"></i>${r.label}</span>`).join("");
+  const pieEl = $("#dashboardPie");
+  if (pieEl) {
+    const range = rangeFor(overall);
+    pieEl.style.background = `conic-gradient(${range.color} 0 ${overall}%, rgba(255,255,255,0.08) ${overall}% 100%)`;
+    pieEl.style.setProperty("--pie-glow", `${range.color}70`);
+    pieEl.style.setProperty("--pie-glow-far", `${range.color}28`);
+    pieEl.innerHTML = `<strong>${overall}%</strong><span>${totalC.toLocaleString("pt-BR")}<br>concluídos</span>`;
+    let info = $("#dashPieInfo");
+    if (!info) { info = document.createElement("div"); info.id = "dashPieInfo"; info.className = "goal-pie-info"; pieEl.parentElement.appendChild(info); }
+    info.innerHTML = `<strong style="color:${range.color}">${totalC.toLocaleString("pt-BR")}</strong><small>de ${totalT.toLocaleString("pt-BR")} na planilha</small>`;
+  }
+}
+
+function renderDashboardCourseTable(filteredCourses, rows) {
+  const headEl = $("#dashCourseHead");
+  const bodyEl = $("#dashCourseBody");
+  if (!headEl || !bodyEl) return;
+  const pctColor = (v) => v >= 90 ? "#22c55e" : v >= 50 ? "#38bdf8" : v >= 30 ? "#f59e0b" : "#ef4444";
+  headEl.innerHTML = `<th>Curso</th><th>Trilha</th><th class="th-num">Inscritos</th><th class="th-num">Concluídos</th><th class="th-num">Em andamento</th><th class="th-num">Não iniciados</th><th class="th-num">%</th>`;
+  bodyEl.innerHTML = filteredCourses.map((c) => {
+    const cr = rows.filter((r) => r.cursoId === c.id);
+    const ins = cr.length;
+    const con = cr.filter((r) => r.resultado === "Concluído").length;
+    const and = cr.filter((r) => r.resultado === "Em andamento").length;
+    const nao = ins - con - and;
+    const p = ins > 0 ? Math.round((con / ins) * 100) : 0;
+    const color = pctColor(p);
+    const trilhaStyle = c.trilha ? TRILHA_COLORS[c.trilha] : null;
+    const trilhaBadge = trilhaStyle ? `<span class="formation-tag" style="font-size:0.68rem;background:${trilhaStyle.bg};border-color:${trilhaStyle.border};color:${trilhaStyle.color}">${esc(c.trilha)}</span>` : `<span style="color:var(--muted);font-size:0.78rem">—</span>`;
+    return `<tr>
+      <td><strong>${esc(c.nome)}</strong>${c.cargaHoraria ? `<br><small class="muted">${esc(c.cargaHoraria)}</small>` : ""}</td>
+      <td>${trilhaBadge}</td>
+      <td class="td-num">${ins.toLocaleString("pt-BR")}</td>
+      <td class="td-num">${con.toLocaleString("pt-BR")}</td>
+      <td class="td-num">${and.toLocaleString("pt-BR")}</td>
+      <td class="td-num">${nao.toLocaleString("pt-BR")}</td>
+      <td><div class="pct-bar-wrap"><div class="pct-bar-track"><div class="pct-bar-fill" style="width:${Math.min(100,p)}%;background:${color}"></div></div><span class="pct-bar-label" style="color:${color}">${p}%</span></div></td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="7" class="empty-row">Nenhum dado.</td></tr>`;
+}
+
+function renderDashboardSchoolTable() {
+  if (state.formationMode !== "teacher-dashboard") return;
+  const headEl = $("#dashSchoolHead");
+  const bodyEl = $("#dashSchoolBody");
+  if (!headEl || !bodyEl) return;
+  const { rows } = getDashboardRows();
+  const search = normalize(state.dashboardSchoolSearch);
+  const pctColor = (v) => v >= 90 ? "#22c55e" : v >= 50 ? "#38bdf8" : v >= 30 ? "#f59e0b" : "#ef4444";
+  const byInep = new Map();
+  rows.forEach((r) => {
+    if (!byInep.has(r.inep)) byInep.set(r.inep, { gre: r.gre, escola: r.escola || r.inep, total: 0, concluidos: 0 });
+    const e = byInep.get(r.inep);
+    e.total++;
+    if (r.resultado === "Concluído") e.concluidos++;
+  });
+  let entries = [...byInep.values()].sort((a, b) => getGreNumber(a.gre) - getGreNumber(b.gre) || a.escola.localeCompare(b.escola));
+  if (search) entries = entries.filter((e) => normalize(e.escola).includes(search) || normalize(e.gre).includes(search));
+  headEl.innerHTML = `<th>GRE</th><th>Escola</th><th class="th-num">Inscritos</th><th class="th-num">Concluídos</th><th class="th-num">%</th>`;
+  bodyEl.innerHTML = entries.map((e) => {
+    const p = e.total > 0 ? Math.round((e.concluidos / e.total) * 100) : 0;
+    const color = pctColor(p);
+    return `<tr>
+      <td class="td-gre">${esc(e.gre)}</td>
+      <td class="td-escola"><strong>${esc(e.escola)}</strong></td>
+      <td class="td-num">${e.total.toLocaleString("pt-BR")}</td>
+      <td class="td-num">${e.concluidos.toLocaleString("pt-BR")}</td>
+      <td><div class="pct-bar-wrap"><div class="pct-bar-track"><div class="pct-bar-fill" style="width:${Math.min(100,p)}%;background:${color}"></div></div><span class="pct-bar-label" style="color:${color}">${p}%</span></div></td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="5" class="empty-row">Nenhuma escola encontrada.</td></tr>`;
+}
+
+function exportDashboardXlsx() {
+  if (!window.XLSX) { notify("Erro", "Biblioteca XLSX não carregada.", "error"); return; }
+  const { rows, filteredCourses } = getDashboardRows();
+  const wb = window.XLSX.utils.book_new();
+  // Sheet: por curso
+  const courseHeaders = ["Curso", "Trilha", "Carga horária", "Inscritos", "Concluídos", "Em andamento", "Não iniciados", "%"];
+  const courseData = filteredCourses.map((c) => {
+    const cr = rows.filter((r) => r.cursoId === c.id);
+    const ins = cr.length; const con = cr.filter((r) => r.resultado === "Concluído").length;
+    const and = cr.filter((r) => r.resultado === "Em andamento").length;
+    return [c.nome, c.trilha || "", c.cargaHoraria || "", ins, con, and, ins - con - and, ins > 0 ? Math.round(con / ins * 100) + "%" : "0%"];
+  });
+  window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.aoa_to_sheet([courseHeaders, ...courseData]), "Por Curso");
+  // Sheet: por escola
+  const byInep = new Map();
+  rows.forEach((r) => {
+    if (!byInep.has(r.inep)) byInep.set(r.inep, { gre: r.gre, escola: r.escola || r.inep, total: 0, concluidos: 0 });
+    const e = byInep.get(r.inep); e.total++; if (r.resultado === "Concluído") e.concluidos++;
+  });
+  const schoolHeaders = ["GRE", "Escola", "Inscritos", "Concluídos", "%"];
+  const schoolData = [...byInep.values()].sort((a, b) => getGreNumber(a.gre) - getGreNumber(b.gre))
+    .map((e) => [e.gre, e.escola, e.total, e.concluidos, e.total > 0 ? Math.round(e.concluidos / e.total * 100) + "%" : "0%"]);
+  window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.aoa_to_sheet([schoolHeaders, ...schoolData]), "Por Escola");
+  // Sheet: por GRE
+  const byGre = new Map();
+  rows.forEach((r) => {
+    if (!byGre.has(r.gre)) byGre.set(r.gre, { total: 0, concluidos: 0 });
+    const e = byGre.get(r.gre); e.total++; if (r.resultado === "Concluído") e.concluidos++;
+  });
+  const greHeaders = ["GRE", "Inscritos", "Concluídos", "%"];
+  const greData = [...byGre.entries()].sort((a, b) => getGreNumber(a[0]) - getGreNumber(b[0]))
+    .map(([g, d]) => [g, d.total, d.concluidos, d.total > 0 ? Math.round(d.concluidos / d.total * 100) + "%" : "0%"]);
+  window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.aoa_to_sheet([greHeaders, ...greData]), "Por GRE");
+  window.XLSX.writeFile(wb, "dashboard_formacao.xlsx");
+  notify("Exportado", "Dashboard exportado em XLSX com 3 abas.", "success");
 }
 
 function renderCoursesList() {

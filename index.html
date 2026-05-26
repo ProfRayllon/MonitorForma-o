@@ -298,7 +298,9 @@
                   <p class="eyebrow">Professores</p>
                   <h3 id="coursesFormationName">Cursos</h3>
                 </div>
-                <div style="display:flex;align-items:center;gap:10px">
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                  <button class="secondary" id="dashboardBtn" type="button">Dashboard</button>
+                  <button class="secondary admin-only" id="insertDataBtn" type="button">Inserir dados</button>
                   <button class="secondary admin-only" id="addCourseBtn" type="button">Cadastrar curso</button>
                 </div>
               </div>
@@ -343,6 +345,99 @@
                   <button type="submit" id="courseFormSubmitBtn">Salvar curso</button>
                 </div>
               </form>
+            </section>
+
+            <!-- INSERIR DADOS -->
+            <section class="hidden" id="teacherInsertArea">
+              <button class="back-button" id="backFromInsertBtn" type="button" style="margin-bottom:12px">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                Voltar
+              </button>
+              <div class="section-title row-title" style="margin-bottom:16px">
+                <div>
+                  <p class="eyebrow">Professores</p>
+                  <h3 id="insertAreaTitle">Inserir dados</h3>
+                </div>
+              </div>
+              <div class="formation-grid" id="insertCourseCards"></div>
+            </section>
+
+            <!-- DASHBOARD GERAL -->
+            <section class="hidden" id="teacherDashboardArea">
+              <div class="section-title row-title" style="margin-bottom:16px">
+                <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+                  <button class="back-button" id="backFromDashboardBtn" type="button" style="margin:0">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                    Voltar
+                  </button>
+                  <div>
+                    <p class="eyebrow">Professores · Dashboard</p>
+                    <h3 id="dashboardFormationName">Dashboard geral</h3>
+                  </div>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                  <button class="secondary" id="exportDashboardXlsx" type="button">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                    Excel
+                  </button>
+                  <button class="secondary" id="exportDashboardPdf" type="button">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                    PDF
+                  </button>
+                </div>
+              </div>
+
+              <div class="panel dash-filter-row" style="margin-bottom:16px">
+                <select id="dashFilterGre"><option value="todos">Todas as GREs</option></select>
+                <select id="dashFilterCourse"><option value="todos">Todos os cursos</option></select>
+              </div>
+
+              <div class="metrics-grid" id="dashboardMetrics" style="margin-bottom:16px"></div>
+
+              <article class="panel goal-panel" style="margin-bottom:16px">
+                <div class="panel-head compact-head">
+                  <div>
+                    <p class="eyebrow">Conclusão por GRE</p>
+                    <h3 class="panel-title">Professores concluídos por GRE</h3>
+                  </div>
+                </div>
+                <div class="goal-bars-wrap">
+                  <div class="goal-bars" id="dashboardGreBars"></div>
+                  <div class="goal-pie" id="dashboardPie"></div>
+                </div>
+                <div class="goal-legend" id="dashboardGreLegend"></div>
+              </article>
+
+              <article class="panel" style="margin-bottom:16px">
+                <div class="panel-head compact-head">
+                  <div>
+                    <p class="eyebrow">Análise</p>
+                    <h3 class="panel-title">Por curso</h3>
+                  </div>
+                </div>
+                <div class="table-wrap">
+                  <table class="teacher-table">
+                    <thead><tr id="dashCourseHead"></tr></thead>
+                    <tbody id="dashCourseBody"></tbody>
+                  </table>
+                </div>
+              </article>
+
+              <article class="panel">
+                <div class="panel-head compact-head">
+                  <div>
+                    <p class="eyebrow">Análise</p>
+                    <h3 class="panel-title">Por escola</h3>
+                  </div>
+                  <input class="search" id="dashSchoolSearch" placeholder="Buscar escola ou GRE..." style="width:220px" />
+                </div>
+                <div class="table-wrap">
+                  <table class="teacher-table">
+                    <thead><tr id="dashSchoolHead"></tr></thead>
+                    <tbody id="dashSchoolBody"></tbody>
+                  </table>
+                </div>
+              </article>
             </section>
 
             <section class="hidden" id="teachersArea">
