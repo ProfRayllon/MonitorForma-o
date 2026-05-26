@@ -3539,6 +3539,7 @@ function renderTeachersArea() {
   if (state.formationMode !== "teachers") return;
 
   const isAdmin = hasAdminAccess();
+  const strictAdmin = state.user?.perfil === "admin";
   // Update header to show course name when a course is selected
   const currentCourse = state.selectedCourseId ? state.courses.find((c) => c.id === state.selectedCourseId) : null;
   const headerNameEl = $("#teacherFormationName");
@@ -3562,22 +3563,25 @@ function renderTeachersArea() {
   const totalInscritos = allPersonRows.length;
   const totalConcluidos = allPersonRows.filter((r) => r.resultado === "Concluído").length;
   const totalEmAndamento = allPersonRows.filter((r) => r.resultado === "Em andamento").length;
+  const totalNaoIniciados = allPersonRows.filter((r) => !r.resultado || r.resultado === "Não iniciado").length;
+  const pctNaoIniciados = totalInscritos > 0 ? Math.round((totalNaoIniciados / totalInscritos) * 100) : 0;
   const pctGeral = totalInscritos > 0 ? Math.round((totalConcluidos / totalInscritos) * 100) : 0;
   const totalEscolas = schoolRows.length;
   const escolasConcluidas = schoolRows.filter((s) => s.pct >= 75).length;
 
   const metricsEl = $("#teacherMetrics");
   if (metricsEl) {
-    const variants = ["metric-primary", "metric-accent", "metric-ok", "metric-wait", "metric-ok"];
-    const items = [
-      { label: "Professores esperados", value: totalEsperado.toLocaleString("pt-BR"), icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>` },
-      { label: "Professores na planilha", value: totalInscritos.toLocaleString("pt-BR"), icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="8" x2="16" y1="13" y2="13"/><line x1="8" x2="16" y1="17" y2="17"/></svg>` },
-      { label: "Concluídos", value: totalConcluidos.toLocaleString("pt-BR"), icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>` },
-      { label: "Em andamento", value: totalEmAndamento.toLocaleString("pt-BR"), icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>` },
-      { label: "Taxa de conclusão", value: `${pctGeral}%`, icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="18" y1="20" y2="10"/><line x1="12" x2="12" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="14"/></svg>` },
+    const allItems = [
+      { label: "Professores esperados", value: totalEsperado.toLocaleString("pt-BR"), variant: "metric-primary", adminOnly: true, icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>` },
+      { label: "Professores na planilha", value: totalInscritos.toLocaleString("pt-BR"), variant: "metric-accent", icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="8" x2="16" y1="13" y2="13"/><line x1="8" x2="16" y1="17" y2="17"/></svg>` },
+      { label: "Concluídos", value: totalConcluidos.toLocaleString("pt-BR"), variant: "metric-ok", icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>` },
+      { label: "Em andamento", value: totalEmAndamento.toLocaleString("pt-BR"), variant: "metric-wait", icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>` },
+      { label: "Não iniciados", value: `${totalNaoIniciados.toLocaleString("pt-BR")} · ${pctNaoIniciados}%`, variant: "metric-danger", icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>` },
+      { label: "Taxa de conclusão", value: `${pctGeral}%`, variant: "metric-ok", icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="18" y1="20" y2="10"/><line x1="12" x2="12" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="14"/></svg>` },
     ];
-    metricsEl.innerHTML = items.map((m, i) => `
-      <div class="metric panel ${variants[i]}">
+    const items = allItems.filter((m) => !m.adminOnly || strictAdmin);
+    metricsEl.innerHTML = items.map((m) => `
+      <div class="metric panel ${m.variant}">
         <div class="metric-icon">${m.icon}</div>
         <span>${m.label}</span>
         <strong>${m.value}</strong>
@@ -3587,7 +3591,7 @@ function renderTeachersArea() {
 
   // Gráfico GRE (admin) / Insight regional
   if (isAdmin) {
-    renderTeacherGreBars(schoolRows);
+    renderTeacherGreBars(schoolRows, strictAdmin);
     $("#teacherRegionalInsight")?.classList.add("hidden");
   } else {
     const insightEl = $("#teacherRegionalInsight");
@@ -3631,12 +3635,12 @@ function renderTeachersArea() {
   renderTeachersTable();
 }
 
-function renderTeacherGreBars(schoolRows) {
+function renderTeacherGreBars(schoolRows, strictAdmin = true) {
   const byGre = new Map();
   schoolRows.forEach((s) => {
-    if (!byGre.has(s.gre)) byGre.set(s.gre, { esperado: 0, concluidos: 0 });
+    if (!byGre.has(s.gre)) byGre.set(s.gre, { base: 0, concluidos: 0 });
     const e = byGre.get(s.gre);
-    e.esperado += s.esperado || s.total;
+    e.base += strictAdmin ? (s.esperado || s.total) : s.total;
     e.concluidos += s.concluidos;
   });
 
@@ -3644,9 +3648,9 @@ function renderTeacherGreBars(schoolRows) {
     .filter(([gre]) => gre && /\d/.test(gre))
     .map(([gre, item]) => ({
       gre,
-      esperado: item.esperado,
+      base: item.base,
       concluidos: item.concluidos,
-      percent: item.esperado > 0 ? Math.round((item.concluidos / item.esperado) * 100) : 0,
+      percent: item.base > 0 ? Math.round((item.concluidos / item.base) * 100) : 0,
     }))
     .sort((a, b) => getGreNumber(a.gre) - getGreNumber(b.gre));
 
@@ -3659,8 +3663,9 @@ function renderTeacherGreBars(schoolRows) {
   const rangeFor = (v) => ranges.find((r) => r.test(v)) || ranges.at(-1);
   const maxPercent = Math.max(100, ...entries.map((e) => e.percent));
   const totalConcluidos = entries.reduce((s, e) => s + e.concluidos, 0);
-  const totalEsperado = entries.reduce((s, e) => s + e.esperado, 0);
-  const overallPercent = totalEsperado > 0 ? Math.round((totalConcluidos / totalEsperado) * 100) : 0;
+  const totalBase = entries.reduce((s, e) => s + e.base, 0);
+  const overallPercent = totalBase > 0 ? Math.round((totalConcluidos / totalBase) * 100) : 0;
+  const pieLabel = strictAdmin ? "esperados" : "na planilha";
 
   const barsEl = $("#teacherGreBars");
   if (barsEl) {
@@ -3669,9 +3674,9 @@ function renderTeacherGreBars(schoolRows) {
       const fillH = Math.max(4, Math.round((item.percent / maxPercent) * 100));
       const sel = $("#teacherGreFilter")?.value === item.gre ? " selected" : "";
       return `
-        <button class="goal-bar goal-${range.key}${sel}" type="button" data-teacher-gre="${esc(item.gre)}" title="${esc(`${item.gre}: ${item.concluidos}/${item.esperado} concluídos (${item.percent}%)`)}">
+        <button class="goal-bar goal-${range.key}${sel}" type="button" data-teacher-gre="${esc(item.gre)}" title="${esc(`${item.gre}: ${item.concluidos}/${item.base} concluídos (${item.percent}%)`)}">
           <span class="goal-fill" style="height:${fillH}%" data-pct="${item.percent}%">
-            <span class="goal-count">${item.concluidos}/${item.esperado}</span>
+            <span class="goal-count">${item.concluidos}/${item.base}</span>
           </span>
           <span class="goal-label">${esc(item.gre.replace(" GRE", ""))}<small>GRE</small></span>
         </button>
@@ -3707,7 +3712,7 @@ function renderTeacherGreBars(schoolRows) {
       infoEl.className = "goal-pie-info";
       pieEl.parentElement.appendChild(infoEl);
     }
-    infoEl.innerHTML = `<strong style="color:${range.color}">${totalConcluidos.toLocaleString("pt-BR")}</strong><small>de ${totalEsperado.toLocaleString("pt-BR")} esperados</small>`;
+    infoEl.innerHTML = `<strong style="color:${range.color}">${totalConcluidos.toLocaleString("pt-BR")}</strong><small>de ${totalBase.toLocaleString("pt-BR")} ${pieLabel}</small>`;
   }
 }
 
