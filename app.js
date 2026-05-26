@@ -993,7 +993,9 @@ function renderShell() {
     state.tab === "home" ? "Visao geral do sistema" :
     state.tab === "profile" ? "Meu Perfil" :
     "Acompanhamento de formacoes";
+  const strictAdmin = state.user?.perfil === "admin";
   $$(".admin-only").forEach((el) => el.classList.toggle("hidden", !isAdmin));
+  $$(".strict-admin-only").forEach((el) => el.classList.toggle("hidden", !strictAdmin));
   $$(".regional-only").forEach((el) => el.classList.toggle("hidden", isAdmin));
   renderSidebarUser();
   renderTopbarUser();
@@ -1044,7 +1046,9 @@ function renderTopbarUser() {
 
 function renderTabs() {
   const isAdmin = hasAdminAccess();
+  const strictAdmin = state.user?.perfil === "admin";
   if (!isAdmin && (state.tab === "users" || state.tab === "home")) state.tab = "formation";
+  if (!strictAdmin && state.tab === "users") state.tab = "formation";
   $$(".nav-item").forEach((b) => b.classList.toggle("active", b.dataset.tab === state.tab));
   $$(".tab-panel").forEach((p) => p.classList.toggle("hidden", p.dataset.panel !== state.tab));
 }
@@ -2955,7 +2959,7 @@ async function submitAddUser(event) {
 }
 
 function renderUsers() {
-  if (state.tab !== "users" || !hasAdminAccess()) return;
+  if (state.tab !== "users" || state.user?.perfil !== "admin") return;
   const gres = ["TODAS", ...getGres()];
   $("#usersTable").innerHTML = state.users
     .map(
