@@ -1,3 +1,199 @@
+/* ─── PAGE LOADER ────────────────────────────────────────────────────── */
+#pageLoader {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 50% 40%, rgba(139,92,246,.18), transparent 26%),
+    radial-gradient(circle at 80% 14%, rgba(109,40,217,.14), transparent 20%),
+    radial-gradient(circle at 20% 80%, rgba(76,29,149,.11), transparent 24%),
+    linear-gradient(145deg, #04020a, #09061a);
+  color: #f8f8ff;
+  font-family: Inter, Arial, sans-serif;
+  transition: opacity .45s ease, visibility .45s ease;
+}
+#pageLoader.pl-hide {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.pl-inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 26px;
+  padding: 24px;
+}
+.pl-orb {
+  position: absolute;
+  width: min(64vw, 430px);
+  aspect-ratio: 1;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(139,92,246,.17), rgba(139,92,246,.04) 34%, transparent 68%);
+  filter: blur(8px);
+  animation: plPulseOrb 3s ease-in-out infinite;
+}
+.pl-logo-wrap {
+  position: relative;
+  width: min(52vw, 260px);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  filter: drop-shadow(0 0 24px rgba(139,92,246,.22));
+  animation: plFloat 3s ease-in-out infinite;
+}
+.pl-ring {
+  position: absolute;
+  inset: -18px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.06);
+  box-shadow: 0 0 0 1px rgba(139,92,246,.06) inset;
+}
+.pl-ring::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    transparent 225deg,
+    rgba(255,255,255,.92) 282deg,
+    rgba(139,92,246,.95) 320deg,
+    transparent 360deg
+  );
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 7px), #000 calc(100% - 6px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 7px), #000 calc(100% - 6px));
+  animation: plSpin 2.8s linear infinite;
+  opacity: .95;
+}
+.pl-logo-wrap svg { position: relative; z-index: 2; width: 100%; height: 100%; overflow: visible; }
+.pl-logo-group { transform: translateY(4px) scale(.92); transform-origin: center; }
+.pl-ghost-path {
+  fill: none;
+  stroke: rgba(255,255,255,.09);
+  stroke-width: 26;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.pl-draw-path {
+  fill: none;
+  stroke: #f8f8ff;
+  stroke-width: 26;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 10px rgba(255,255,255,.20)) drop-shadow(0 0 18px rgba(139,92,246,.64));
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: plDraw 3.3s cubic-bezier(.68,.02,.32,1) infinite;
+}
+.pl-text {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  text-transform: uppercase;
+  letter-spacing: .18em;
+  font-size: clamp(13px, 2vw, 17px);
+  font-weight: 700;
+  opacity: .95;
+}
+.pl-text span { animation: plBlink 1.4s infinite both; }
+.pl-text span:nth-child(2) { animation-delay: .18s; }
+.pl-text span:nth-child(3) { animation-delay: .36s; }
+.pl-progress {
+  width: min(52vw, 300px);
+  height: 5px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255,255,255,.08);
+}
+.pl-progress > div {
+  width: 34%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(255,255,255,.96), #8b5cf6, #6d28d9);
+  box-shadow: 0 0 12px rgba(139,92,246,.55);
+  animation: plProgress 1.55s ease-in-out infinite;
+}
+@keyframes plDraw {
+  0%   { stroke-dashoffset: 1; opacity: 1; }
+  80%  { stroke-dashoffset: 0; opacity: 1; }
+  90%  { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: 1; opacity: 1; }
+}
+@keyframes plSpin    { to { transform: rotate(360deg); } }
+@keyframes plProgress {
+  0%   { transform: translateX(-130%); }
+  100% { transform: translateX(300%); }
+}
+@keyframes plBlink {
+  0%,20% { opacity: .18; transform: translateY(0); }
+  50%    { opacity: 1;   transform: translateY(-2px); }
+  100%   { opacity: .18; transform: translateY(0); }
+}
+@keyframes plPulseOrb {
+  0%,100% { transform: scale(.96); opacity: .72; }
+  50%     { transform: scale(1.04); opacity: 1; }
+}
+@keyframes plFloat {
+  0%,100% { transform: translateY(0); }
+  50%     { transform: translateY(-8px); }
+}
+
+/* ─── CONTENT LOADER (overlay fosco) ────────────────────────────────── */
+#contentLoader {
+  position: fixed;
+  inset: 0;
+  z-index: 8000;
+  display: grid;
+  place-items: center;
+  background: rgba(7,7,15,.62);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: opacity .25s ease, visibility .25s ease;
+}
+#contentLoader.pl-hide {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.cl-wrap {
+  position: relative;
+  width: 130px;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  filter: drop-shadow(0 0 20px rgba(139,92,246,.3));
+  animation: plFloat 3s ease-in-out infinite;
+}
+.cl-ring {
+  position: absolute;
+  inset: -14px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.06);
+}
+.cl-ring::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    transparent 225deg,
+    rgba(255,255,255,.92) 282deg,
+    rgba(139,92,246,.95) 320deg,
+    transparent 360deg
+  );
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 5px));
+  animation: plSpin 2.2s linear infinite;
+}
+.cl-wrap svg { position: relative; z-index: 2; width: 100%; height: 100%; overflow: visible; }
+
 /* ─── DESIGN TOKENS ────────────────────────────────────────────────────── */
 :root {
   --bg: #07070f;
@@ -929,9 +1125,12 @@ option { color: #111; background: #fff; }
 /* ─── FORMATION CARDS ───────────────────────────────────────────────────── */
 .formation-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 14px;
   margin-bottom: 14px;
+}
+#teacherFormationCards {
+  grid-template-columns: repeat(auto-fit, minmax(320px, 420px));
 }
 
 .event-card {
@@ -1013,6 +1212,22 @@ option { color: #111; background: #fff; }
 
 .event-progress { height: 6px; border-radius: 99px; background: rgba(255,255,255,0.08); overflow: hidden; }
 .event-progress span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--primary-2), var(--accent)); transition: width 0.6s ease; }
+
+.formation-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.formation-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 99px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: rgba(168, 85, 247, 0.12);
+  border: 1px solid rgba(168, 85, 247, 0.28);
+  color: var(--primary-2);
+  letter-spacing: 0.01em;
+}
+.formation-tag svg { flex-shrink: 0; opacity: 0.8; }
 
 .card-actions {
   display: flex;
@@ -1783,7 +1998,7 @@ option { color: #111; background: #fff; }
 .goal-fill::before {
   content: attr(data-pct);
   position: absolute;
-  top: -27px;
+  bottom: calc(100% + 5px);
   left: 50%;
   transform: translateX(-50%);
   color: var(--ink);
@@ -2262,6 +2477,47 @@ tbody tr:last-child td { border-bottom: 0; }
 }
 
 .inep-code { font-size: 0.79rem; opacity: 0.75; }
+
+/* ─── PROFESSORES ────────────────────────────────────────────────────── */
+.pct-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: flex-end;
+}
+.pct-bar-track {
+  width: 72px;
+  height: 6px;
+  background: rgba(255,255,255,0.09);
+  border-radius: 3px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.pct-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  max-width: 100%;
+  min-width: 2px;
+  transition: width 0.3s ease;
+}
+.pct-bar-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+  min-width: 38px;
+  text-align: right;
+}
+.td-num { text-align: right; font-variant-numeric: tabular-nums; padding-right: 12px !important; }
+.th-num { text-align: right !important; padding-right: 12px !important; }
+.td-gre { white-space: nowrap; font-size: 0.8rem; color: var(--ink-dim); }
+.td-escola strong { font-size: 0.875rem; }
+.empty-row { text-align: center; color: var(--muted); padding: 32px !important; font-size: 0.85rem; }
+
+#teacherTableEl {
+  width: auto;
+  table-layout: fixed;
+  min-width: 100%;
+}
 
 .table-select {
   background: transparent;

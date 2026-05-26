@@ -13,6 +13,26 @@
     <link rel="stylesheet" href="styles.css?v=26" />
   </head>
   <body>
+    <!-- LOADER -->
+    <div id="pageLoader" role="status" aria-label="Carregando">
+      <div class="pl-inner">
+        <div class="pl-orb" aria-hidden="true"></div>
+        <section class="pl-logo-wrap">
+          <div class="pl-ring" aria-hidden="true"></div>
+          <svg viewBox="0 0 400 400" aria-hidden="true">
+            <g class="pl-logo-group">
+              <path pathLength="1" class="pl-ghost-path"
+                d="M306 274 L306 176 L200 115 L94 176 L200 237 L256 205 L256 283 A56 40 0 0 1 144 283 L144 205 L200 237 L306 176" />
+              <path pathLength="1" class="pl-draw-path"
+                d="M306 274 L306 176 L200 115 L94 176 L200 237 L256 205 L256 283 A56 40 0 0 1 144 283 L144 205 L200 237 L306 176" />
+            </g>
+          </svg>
+        </section>
+        <div class="pl-text">Carregando<span>.</span><span>.</span><span>.</span></div>
+        <div class="pl-progress" aria-hidden="true"><div></div></div>
+      </div>
+    </div>
+
     <main id="app" class="app-shell">
 
       <!-- LOGIN -->
@@ -186,34 +206,258 @@
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
                   </div>
                 </button>
-                <button class="choice-card muted-choice" id="teachersChoice">
-                  <div class="choice-icon-wrap muted-icon">
+                <button class="choice-card" id="teachersChoice">
+                  <div class="choice-icon-wrap">
                     <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                   </div>
-                  <span class="choice-tag muted-tag">Em breve</span>
+                  <span class="choice-tag">Formação ativa</span>
                   <strong>Professores</strong>
-                  <small>Em desenvolvimento. Esta área será destinada ao monitoramento de formações para professores da rede estadual.</small>
-                  <div class="choice-cta muted-cta">Em desenvolvimento</div>
+                  <small>Acompanhe a conclusão da formação por professor e por escola, com recorte por GRE.</small>
+                  <div class="choice-cta">Acessar <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></div>
                 </button>
               </div>
             </section>
 
-            <section class="hidden" id="teachersEmpty">
-              <button class="back-button" data-back-home aria-label="Voltar">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            <!-- LISTA DE FORMAÇÕES DE PROFESSORES -->
+            <section class="hidden" id="teachersListArea">
+              <button class="back-button" data-back-home type="button" style="margin-bottom:12px">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
                 Voltar
               </button>
-              <article class="panel empty-state">
-                <div class="empty-icon-wrap">
-                  <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              <div class="section-title row-title" id="teachersListHeader">
+                <div>
+                  <p class="eyebrow">Professores</p>
+                  <h3>Formações cadastradas</h3>
                 </div>
-                <p class="eyebrow">Em desenvolvimento</p>
-                <h3>Formações de Professores</h3>
-                <p class="muted">Esta área está reservada para o módulo de formação de professores. Neste momento, o foco principal está na formação de diretores escolares da rede estadual.</p>
+                <div style="display:flex;align-items:center;gap:10px">
+                  <button class="secondary" id="reloadTeacherListBtn" type="button">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+                    Atualizar dados
+                  </button>
+                  <div class="formation-admin-tabs admin-only" id="teacherAdminTabs">
+                    <button class="secondary active" type="button" id="teacherTabList">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
+                      Formações
+                    </button>
+                    <button class="secondary" type="button" id="addTeacherFormationBtn">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+                      Cadastrar
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="formation-grid" id="teacherFormationCards"></div>
+
+              <form class="panel formation-form hidden admin-only" id="teacherFormForm">
+                <div class="panel-head">
+                  <div>
+                    <p class="eyebrow">Administrativo</p>
+                    <h3 id="teacherFormTitle">Cadastrar formação</h3>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <label>
+                    Nome da formação
+                    <input name="nome" placeholder="Ex: Formação de Professores 2026" required />
+                  </label>
+                  <label>
+                    Carga horária
+                    <input name="cargaHoraria" placeholder="Ex: 40h" />
+                  </label>
+                </div>
+                <div class="form-row">
+                  <label>
+                    Início da formação
+                    <input name="inicioFormacao" type="date" />
+                  </label>
+                  <label>
+                    Fim da formação
+                    <input name="fimFormacao" type="date" />
+                  </label>
+                </div>
+                <label>
+                  Foto da formação
+                  <input name="foto" type="file" accept="image/*" />
+                </label>
+                <p class="hint" id="teacherFormPhotoHint"></p>
+                <div class="form-actions">
+                  <button class="secondary" id="cancelTeacherFormBtn" type="button">Cancelar</button>
+                  <button type="submit" id="teacherFormSubmitBtn">Salvar formação</button>
+                </div>
+              </form>
+            </section>
+
+            <!-- CURSOS DE UMA FORMAÇÃO DE PROFESSORES -->
+            <section class="hidden" id="coursesArea">
+              <button class="back-button" id="backToTeachersListBtn" type="button" style="margin-bottom:12px">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                Voltar
+              </button>
+              <div class="section-title row-title" id="coursesListHeader">
+                <div>
+                  <p class="eyebrow">Professores</p>
+                  <h3 id="coursesFormationName">Cursos</h3>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px">
+                  <button class="secondary admin-only" id="addCourseBtn" type="button">Cadastrar curso</button>
+                </div>
+              </div>
+              <div class="formation-grid" id="courseCards"></div>
+
+              <form class="panel formation-form hidden admin-only" id="courseFormEl">
+                <div class="panel-head">
+                  <div>
+                    <p class="eyebrow">Administrativo</p>
+                    <h3 id="courseFormTitle">Cadastrar curso</h3>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <label>
+                    Nome do curso
+                    <input name="nome" placeholder="Ex: Google for Education" required />
+                  </label>
+                  <label>
+                    Carga horária
+                    <input name="cargaHoraria" placeholder="Ex: 20h" />
+                  </label>
+                </div>
+                <label>
+                  Trilha
+                  <select name="trilha">
+                    <option value="">Selecione a trilha</option>
+                    <option value="Trilha Institucional">Trilha Institucional</option>
+                    <option value="Educação Socioemocional">Educação Socioemocional</option>
+                    <option value="Educação, Ciência e Tecnologia">Educação, Ciência e Tecnologia</option>
+                    <option value="Gestão Pedagógica">Gestão Pedagógica</option>
+                    <option value="Educação Inclusiva">Educação Inclusiva</option>
+                    <option value="BNCC">BNCC</option>
+                  </select>
+                </label>
+                <label>
+                  Foto do curso
+                  <input name="foto" type="file" accept="image/*" />
+                </label>
+                <p class="hint" id="courseFormPhotoHint"></p>
+                <div class="form-actions">
+                  <button class="secondary" id="cancelCourseFormBtn" type="button">Cancelar</button>
+                  <button type="submit" id="courseFormSubmitBtn">Salvar curso</button>
+                </div>
+              </form>
+            </section>
+
+            <section class="hidden" id="teachersArea">
+              <div class="section-title row-title">
+                <div>
+                  <button class="back-button" id="teachersBackBtn" aria-label="Voltar">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                    Voltar
+                  </button>
+                  <p class="eyebrow" style="margin-top:8px">Professores</p>
+                  <h3 id="teacherFormationName">Formação de Professores 2026</h3>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px">
+                  <span class="import-timestamp hidden" id="teacherImportTimestamp"></span>
+                  <button class="secondary admin-only" id="importTeacherBtn" type="button">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                    Importar planilha
+                  </button>
+                  <input type="file" id="importTeacherInput" accept=".xlsx,.xls,.csv,.tsv,.txt" style="display:none" />
+                </div>
+              </div>
+
+              <div class="metrics-grid" id="teacherMetrics"></div>
+
+              <article class="panel goal-panel admin-only" id="teacherGoalPanel">
+                <div class="panel-head compact-head">
+                  <div>
+                    <p class="eyebrow">Conclusão por GRE</p>
+                    <h3 id="teacherGoalTitle">Professores concluídos por GRE</h3>
+                  </div>
+                </div>
+                <div class="goal-grid">
+                  <div>
+                    <div class="goal-chart" id="teacherGreBars"></div>
+                    <div class="goal-bar-legend" id="teacherGreBarLegend"></div>
+                  </div>
+                  <div class="goal-pie-wrap">
+                    <div class="goal-pie" id="teacherGrePie"></div>
+                  </div>
+                </div>
+              </article>
+
+              <article class="panel hidden" id="teacherRegionalInsight">
+                <div class="panel-head compact-head">
+                  <div>
+                    <p class="eyebrow">Minha regional</p>
+                    <h3>Progresso de conclusão</h3>
+                  </div>
+                </div>
+                <div class="credential-focus">
+                  <div class="credential-gauge" id="teacherRegionalGauge">
+                    <span id="teacherRegionalPercent">0%</span>
+                  </div>
+                  <div class="credential-copy">
+                    <strong id="teacherRegionalSummary">0 de 0 professores concluíram</strong>
+                    <p class="hint" id="teacherRegionalHint">Aguardando dados.</p>
+                    <div class="credential-stats">
+                      <span id="teacherRegionalDoneLabel">Concluídos 0</span>
+                      <span id="teacherRegionalPendingLabel">Pendentes 0</span>
+                    </div>
+                  </div>
+                </div>
+              </article>
+
+              <article class="panel filters-panel">
+                <div class="panel-head">
+                  <div>
+                    <p class="eyebrow">Filtros</p>
+                    <h3 id="teacherTableTitle">Escolas</h3>
+                    <span class="result-count-tag" id="teacherResultCount">0</span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:10px">
+                    <div class="goal-toggle" id="teacherViewToggle">
+                      <button class="secondary active" type="button" data-teacher-view="school">Por escola</button>
+                      <button class="secondary" type="button" data-teacher-view="detail">Por professor</button>
+                    </div>
+                    <button class="secondary" id="downloadTeacherSpreadsheet" type="button">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                      Exportar XLSX
+                    </button>
+                  </div>
+                </div>
+                <div class="filter-row">
+                  <div class="search-wrap">
+                    <svg class="search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                    <input class="search" id="teacherSearch" placeholder="Buscar por escola, INEP, GRE ou professor..." />
+                  </div>
+                  <select id="teacherGreFilter" class="admin-only">
+                    <option value="todos">GRE: Todas</option>
+                  </select>
+                  <select id="teacherConclusaoFilter">
+                    <option value="todos">Situação: Todas</option>
+                    <option value="Concluído">Concluído</option>
+                    <option value="Em andamento">Em andamento</option>
+                    <option value="Não iniciado">Não iniciado</option>
+                  </select>
+                </div>
+              </article>
+
+              <article class="panel">
+                <div class="table-wrap">
+                  <table id="teacherTableEl">
+                    <colgroup id="teacherColgroup"></colgroup>
+                    <thead id="teacherTableHead"></thead>
+                    <tbody id="teacherTable"></tbody>
+                  </table>
+                </div>
               </article>
             </section>
 
             <section class="hidden" id="directorsArea">
+              <button class="back-button" data-back-home type="button" style="margin-bottom:12px">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                Voltar
+              </button>
               <div class="section-title row-title" id="formationListHeader">
                 <div>
                   <p class="eyebrow">Diretores</p>

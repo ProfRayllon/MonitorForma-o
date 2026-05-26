@@ -21,7 +21,10 @@ create table if not exists public.formacoes (
 
 alter table public.formacoes
   add column if not exists prazo_recurso_inscricao date,
-  add column if not exists prazo_recurso_credenciamento date;
+  add column if not exists prazo_recurso_credenciamento date,
+  add column if not exists carga_horaria text not null default '',
+  add column if not exists inicio_formacao date,
+  add column if not exists fim_formacao date;
 
 create table if not exists public.recursos (
   id uuid primary key default gen_random_uuid(),
@@ -131,6 +134,37 @@ create policy "Inserir recursos escola publicamente" on public.escola_recurso fo
 create policy "Atualizar recursos escola publicamente" on public.escola_recurso for update using (true) with check (true);
 create policy "Excluir recursos escola publicamente" on public.escola_recurso for delete using (true);
 
+create table if not exists public.professor_dados (
+  id uuid primary key default gen_random_uuid(),
+  formacao_id uuid not null references public.formacoes(id) on delete cascade,
+  nome text not null default '',
+  email text not null default '',
+  inep text not null default '',
+  conclusao numeric(5,2) not null default 0,
+  media numeric(5,2) not null default 0,
+  resultado text not null default '',
+  imported_at timestamptz not null default now()
+);
+
+alter table public.professor_dados
+  add column if not exists media numeric(5,2) not null default 0,
+  add column if not exists resultado text not null default '';
+
+create index if not exists professor_dados_formacao_id_idx
+  on public.professor_dados (formacao_id);
+
+alter table public.professor_dados enable row level security;
+
+drop policy if exists "Ler professor dados publicamente" on public.professor_dados;
+drop policy if exists "Inserir professor dados publicamente" on public.professor_dados;
+drop policy if exists "Atualizar professor dados publicamente" on public.professor_dados;
+drop policy if exists "Excluir professor dados publicamente" on public.professor_dados;
+
+create policy "Ler professor dados publicamente" on public.professor_dados for select using (true);
+create policy "Inserir professor dados publicamente" on public.professor_dados for insert with check (true);
+create policy "Atualizar professor dados publicamente" on public.professor_dados for update using (true) with check (true);
+create policy "Excluir professor dados publicamente" on public.professor_dados for delete using (true);
+
 alter table public.recursos enable row level security;
 
 drop policy if exists "Ler recursos publicamente" on public.recursos;
@@ -142,3 +176,35 @@ create policy "Ler recursos publicamente" on public.recursos for select using (t
 create policy "Inserir recursos publicamente" on public.recursos for insert with check (true);
 create policy "Atualizar recursos publicamente" on public.recursos for update using (true) with check (true);
 create policy "Excluir recursos publicamente" on public.recursos for delete using (true);
+
+-- ─── CURSOS ──────────────────────────────────────────────────────────────────
+create table if not exists public.cursos (
+  id uuid primary key default gen_random_uuid(),
+  formacao_id uuid not null references public.formacoes(id) on delete cascade,
+  nome text not null default '',
+  carga_horaria text not null default '',
+  foto_url text not null default '',
+  created_at timestamptz not null default now()
+);
+
+create index if not exists cursos_formacao_id_idx on public.cursos (formacao_id);
+
+alter table public.cursos enable row level security;
+
+drop policy if exists "Ler cursos publicamente" on public.cursos;
+drop policy if exists "Inserir cursos publicamente" on public.cursos;
+drop policy if exists "Atualizar cursos publicamente" on public.cursos;
+drop policy if exists "Excluir cursos publicamente" on public.cursos;
+
+create policy "Ler cursos publicamente" on public.cursos for select using (true);
+create policy "Inserir cursos publicamente" on public.cursos for insert with check (true);
+create policy "Atualizar cursos publicamente" on public.cursos for update using (true) with check (true);
+create policy "Excluir cursos publicamente" on public.cursos for delete using (true);
+
+-- Adiciona curso_id em professor_dados
+alter table public.professor_dados
+  add column if not exists curso_id uuid references public.cursos(id) on delete set null;
+
+-- Adiciona trilha em cursos
+alter table public.cursos
+  add column if not exists trilha text not null default '';

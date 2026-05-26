@@ -18,6 +18,17 @@ const state = {
   users: [],
   formations: [],
   recursos: [],
+  teacherRows: [],
+  teacherFormationId: null,
+  teachersView: "school",
+  teachersGreFilter: "todos",
+  teachersSearch: "",
+  teachersConclusaoFilter: "todos",
+  teacherAdminFormView: "list",
+  courses: [],
+  selectedCourseId: null,
+  courseAdminFormView: "list",
+  editingCourseId: null,
 };
 
 const SUPABASE_URL = "https://intswvnfmizbttlrqhdt.supabase.co";
@@ -63,6 +74,15 @@ const makeId = () =>
 const isUuid = (value) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ""));
 
+const TRILHA_COLORS = {
+  "Trilha Institucional":           { bg: "rgba(139,92,246,0.15)",  border: "rgba(139,92,246,0.4)",  color: "#c4b5fd" },
+  "Educação Socioemocional":        { bg: "rgba(236,72,153,0.15)",  border: "rgba(236,72,153,0.4)",  color: "#f9a8d4" },
+  "Educação, Ciência e Tecnologia": { bg: "rgba(6,182,212,0.15)",   border: "rgba(6,182,212,0.4)",   color: "#67e8f9" },
+  "Gestão Pedagógica":              { bg: "rgba(16,185,129,0.15)",  border: "rgba(16,185,129,0.4)",  color: "#6ee7b7" },
+  "Educação Inclusiva":             { bg: "rgba(245,158,11,0.15)",  border: "rgba(245,158,11,0.4)",  color: "#fcd34d" },
+  "BNCC":                           { bg: "rgba(59,130,246,0.15)",  border: "rgba(59,130,246,0.4)",  color: "#93c5fd" },
+};
+
 function userInitials(name) {
   return String(name || "?")
     .trim()
@@ -95,6 +115,68 @@ async function withButtonBusy(button, label, action) {
   }
 }
 
+function hidePageLoader() {
+  const el = document.getElementById("pageLoader");
+  if (!el) return;
+  el.classList.add("pl-hide");
+  setTimeout(() => el.remove(), 500);
+}
+
+function showContentLoader() {
+  if (document.getElementById("contentLoader")) return;
+  const el = document.createElement("div");
+  el.id = "contentLoader";
+  el.setAttribute("aria-hidden", "true");
+  el.innerHTML = `<div class="cl-wrap">
+    <div class="cl-ring"></div>
+    <svg viewBox="0 0 400 400">
+      <g class="pl-logo-group">
+        <path pathLength="1" class="pl-ghost-path" d="M306 274 L306 176 L200 115 L94 176 L200 237 L256 205 L256 283 A56 40 0 0 1 144 283 L144 205 L200 237 L306 176"/>
+        <path pathLength="1" class="pl-draw-path"  d="M306 274 L306 176 L200 115 L94 176 L200 237 L256 205 L256 283 A56 40 0 0 1 144 283 L144 205 L200 237 L306 176"/>
+      </g>
+    </svg>
+  </div>`;
+  document.body.appendChild(el);
+}
+
+function hideContentLoader() {
+  const el = document.getElementById("contentLoader");
+  if (!el) return;
+  el.classList.add("pl-hide");
+  setTimeout(() => el.remove(), 300);
+}
+
+function withContentLoader(fn) {
+  showContentLoader();
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    try { fn(); } finally { hideContentLoader(); }
+  }));
+}
+
+function showPageLoader() {
+  let el = document.getElementById("pageLoader");
+  if (el) { el.classList.remove("pl-hide"); return; }
+  el = document.createElement("div");
+  el.id = "pageLoader";
+  el.setAttribute("role", "status");
+  el.setAttribute("aria-label", "Carregando");
+  el.innerHTML = `<div class="pl-inner">
+    <div class="pl-orb" aria-hidden="true"></div>
+    <section class="pl-logo-wrap">
+      <div class="pl-ring" aria-hidden="true"></div>
+      <svg viewBox="0 0 400 400" aria-hidden="true">
+        <g class="pl-logo-group">
+          <path pathLength="1" class="pl-ghost-path" d="M306 274 L306 176 L200 115 L94 176 L200 237 L256 205 L256 283 A56 40 0 0 1 144 283 L144 205 L200 237 L306 176"/>
+          <path pathLength="1" class="pl-draw-path"  d="M306 274 L306 176 L200 115 L94 176 L200 237 L256 205 L256 283 A56 40 0 0 1 144 283 L144 205 L200 237 L306 176"/>
+        </g>
+      </svg>
+    </section>
+    <div class="pl-text">Carregando<span>.</span><span>.</span><span>.</span></div>
+    <div class="pl-progress" aria-hidden="true"><div></div></div>
+  </div>`;
+  document.body.prepend(el);
+}
+
 async function init() {
   // Carrega dados base — tenta caminhos alternativos para GitHub Pages
   const basePaths = ["data/base.json", "./data/base.json", "/data/base.json"];
@@ -122,11 +204,22 @@ async function init() {
     state.formations = await loadFormations();
   } catch { state.formations = []; }
 
+  try {
+    state.courses = await loadCourses();
+  } catch { state.courses = []; }
+
+  try {
+    state.teacherFormationId = await ensureTeacherFormation();
+    if (state.teacherFormationId) {
+      state.teacherRows = await loadTeacherRowsFromDb(state.teacherFormationId);
+    }
+  } catch { state.teacherRows = []; }
 
   // bindEvents sempre executa, mesmo se algo acima falhou
   bindEvents();
   fillLoginHint();
   if (!restoreSession()) clearLoginForm();
+  hidePageLoader();
 }
 
 async function checkSupabaseConnection() {
@@ -397,6 +490,9 @@ function fromDbFormation(row) {
     prazoInscricoes: row.prazo_inscricoes || "",
     prazoRecursoInscricao: row.prazo_recurso_inscricao || "",
     prazoRecursoCredenciamento: row.prazo_recurso_credenciamento || "",
+    cargaHoraria: row.carga_horaria || "",
+    inicioFormacao: row.inicio_formacao || "",
+    fimFormacao: row.fim_formacao || "",
   };
 }
 
@@ -411,6 +507,9 @@ function toDbFormation(formation) {
     prazo_inscricoes: formation.prazoInscricoes || null,
     prazo_recurso_inscricao: formation.prazoRecursoInscricao || null,
     prazo_recurso_credenciamento: formation.prazoRecursoCredenciamento || null,
+    carga_horaria: formation.cargaHoraria || "",
+    inicio_formacao: formation.inicioFormacao || null,
+    fim_formacao: formation.fimFormacao || null,
   };
 }
 
@@ -431,6 +530,13 @@ function formatDateTime(value) {
     dateStyle: "short",
     timeStyle: "short",
   }).format(date);
+}
+
+function formatDate(value) {
+  if (!value) return "";
+  const [y, m, d] = String(value).split("-");
+  if (!y || !m || !d) return "";
+  return `${d}/${m}/${y}`;
 }
 
 function renderImportTimestamp(formation, isAdmin = state.user?.perfil === "admin") {
@@ -580,6 +686,54 @@ async function deleteFormationFromDb(id) {
   if (error) throw error;
 }
 
+function fromDbCourse(row) {
+  return {
+    id: row.id,
+    formacaoId: row.formacao_id,
+    nome: row.nome || "",
+    cargaHoraria: row.carga_horaria || "",
+    trilha: row.trilha || "",
+    foto: row.foto_url || "",
+    createdAt: row.created_at,
+  };
+}
+
+function toDbCourse(course) {
+  return {
+    id: course.id,
+    formacao_id: course.formacaoId,
+    nome: course.nome,
+    carga_horaria: course.cargaHoraria || "",
+    trilha: course.trilha || "",
+    foto_url: course.foto || "",
+  };
+}
+
+async function loadCourses() {
+  const local = loadStored("monitor-courses", []);
+  if (!db) return local;
+  try {
+    const { data, error } = await db.from("cursos").select("*").order("created_at", { ascending: true });
+    if (error) throw error;
+    const courses = (data || []).map(fromDbCourse);
+    saveStored("monitor-courses", courses);
+    return courses;
+  } catch { return local; }
+}
+
+async function persistCourse(course) {
+  saveStored("monitor-courses", state.courses);
+  if (!db) return;
+  const { error } = await db.from("cursos").upsert(toDbCourse(course), { onConflict: "id" });
+  if (error) throw error;
+}
+
+async function deleteCourseFromDb(id) {
+  if (!db) return;
+  const { error } = await db.from("cursos").delete().eq("id", id);
+  if (error) throw error;
+}
+
 function makeDefaultFormation() {
   return {
     id: makeId(),
@@ -600,7 +754,7 @@ function bindEvents() {
   on("#loginForm", "submit", handleLogin);
   on("#logoutButton", "click", logout);
   on("#directorsChoice", "click", showDirectorsArea);
-  on("#teachersChoice", "click", showTeachersEmpty);
+  on("#teachersChoice", "click", showTeachersArea);
   on("#formationForm", "submit", saveFormation);
   on("#cancelFormationForm", "click", () => showAdminFormationView("list"));
   on("#backToFormations", "click", closeFormationDetail);
@@ -649,7 +803,55 @@ function bindEvents() {
   on("#closeAddUserDialog", "click", () => $("#addUserDialog").close());
   on("#cancelAddUser", "click", () => $("#addUserDialog").close());
 
+  on("#reloadTeacherListBtn", "click", async () => {
+    if (!state.teacherFormationId) return;
+    showContentLoader();
+    state.teacherRows = await loadTeacherRowsFromDb(state.teacherFormationId);
+    renderTeacherListCards();
+    hideContentLoader();
+    notify("Atualizado", "Dados de professores recarregados.", "success");
+  });
+  on("#addTeacherFormationBtn", "click", startNewTeacherFormation);
+  on("#teacherFormForm", "submit", saveTeacherFormation);
+  on("#cancelTeacherFormBtn", "click", () => {
+    state.editingFormationId = null;
+    state.teacherAdminFormView = "list";
+    resetTeacherFormForm();
+    render();
+  });
+
+  on("#importTeacherBtn", "click", () => $("#importTeacherInput")?.click());
+  on("#importTeacherInput", "change", (e) => {
+    const file = e.target.files?.[0];
+    if (file) importTeacherCsv(file);
+    e.target.value = "";
+  });
+  on("#teacherSearch", "input", () => { state.teachersSearch = $("#teacherSearch")?.value || ""; withContentLoader(() => renderTeachersArea()); });
+  on("#teacherGreFilter", "change", () => { state.teachersGreFilter = $("#teacherGreFilter")?.value || "todos"; withContentLoader(() => renderTeachersArea()); });
+  on("#teacherConclusaoFilter", "change", () => { state.teachersConclusaoFilter = $("#teacherConclusaoFilter")?.value || "todos"; withContentLoader(() => renderTeachersArea()); });
+  on("#downloadTeacherSpreadsheet", "click", downloadTeacherSpreadsheet);
+  $$("[data-teacher-view]").forEach((b) => {
+    b.addEventListener("click", () => {
+      state.teachersView = b.dataset.teacherView;
+      state.teachersSearch = "";
+      const search = $("#teacherSearch");
+      if (search) search.value = "";
+      withContentLoader(() => renderTeachersArea());
+    });
+  });
+
   $$("[data-back-home]").forEach((b) => b.addEventListener("click", showFormationHome));
+  on("#teachersBackBtn", "click", backFromTeachers);
+  on("#backToTeachersListBtn", "click", showTeachersArea);
+  on("#addCourseBtn", "click", startNewCourse);
+  on("#courseFormEl", "submit", saveCourse);
+  on("#cancelCourseFormBtn", "click", () => {
+    state.editingCourseId = null;
+    state.courseAdminFormView = "list";
+    resetCourseForm();
+    render();
+    renderCoursesList();
+  });
   $$("[data-formation-admin-view]").forEach((b) => {
     b.addEventListener("click", () => showAdminFormationView(b.dataset.formationAdminView));
   });
@@ -661,8 +863,9 @@ function bindEvents() {
   });
   $$(".nav-item").forEach((b) => {
     b.addEventListener("click", () => {
+      if (b.dataset.tab === "formations") state.formationMode = "home";
       state.tab = b.dataset.tab;
-      render();
+      withContentLoader(() => render());
     });
   });
 }
@@ -764,7 +967,10 @@ function render() {
   renderTabs();
   renderFormationMode();
   renderFormationCards();
+  renderTeacherListCards();
+  renderCoursesList();
   renderFormationDetail();
+  renderTeachersArea();
   renderUsers();
   renderHome();
   renderProfile();
@@ -1167,10 +1373,39 @@ function showDirectorsArea() {
   render();
 }
 
-function showTeachersEmpty() {
-  state.formationMode = "teachers";
+function showTeachersArea() {
+  state.formationMode = "teachers-list";
   state.selectedFormationId = null;
+  state.teacherAdminFormView = "list";
+  state.selectedCourseId = null;
   render();
+  renderTeacherListCards();
+}
+
+function openCoursesArea(formacaoId) {
+  state.formationMode = "courses";
+  state.teacherFormationId = formacaoId;
+  state.selectedCourseId = null;
+  state.courseAdminFormView = "list";
+  render();
+  renderCoursesList();
+}
+
+function openCourseMetrics(courseId) {
+  state.selectedCourseId = courseId;
+  state.formationMode = "teachers";
+  render();
+}
+
+function backFromTeachers() {
+  if (state.selectedCourseId !== null) {
+    state.formationMode = "courses";
+    state.selectedCourseId = null;
+    render();
+    renderCoursesList();
+  } else {
+    showTeachersArea();
+  }
 }
 
 function closeFormationDetail() {
@@ -1196,8 +1431,12 @@ function showAdminFormationView(view) {
 function renderFormationMode() {
   const isAdmin = state.user?.perfil === "admin";
   const showForm = isAdmin && state.adminFormationView === "form" && !state.selectedFormationId;
+  const showTeacherForm = isAdmin && state.teacherAdminFormView === "form" && state.formationMode === "teachers-list";
+  const showCourseForm = isAdmin && state.courseAdminFormView === "form" && state.formationMode === "courses";
   $("#formationHome").classList.toggle("hidden", state.formationMode !== "home");
-  $("#teachersEmpty").classList.toggle("hidden", state.formationMode !== "teachers");
+  $("#teachersListArea").classList.toggle("hidden", state.formationMode !== "teachers-list");
+  $("#coursesArea").classList.toggle("hidden", state.formationMode !== "courses");
+  $("#teachersArea").classList.toggle("hidden", state.formationMode !== "teachers");
   $("#directorsArea").classList.toggle("hidden", state.formationMode !== "directors");
   $("#formationDetail").classList.toggle("hidden", !state.selectedFormationId);
   $("#formationForm").classList.toggle("hidden", !showForm);
@@ -1206,6 +1445,14 @@ function renderFormationMode() {
   $$("[data-formation-admin-view]").forEach((b) => {
     b.classList.toggle("active", b.dataset.formationAdminView === state.adminFormationView);
   });
+  // Teacher form / list toggle within #teachersListArea
+  $("#teacherFormForm")?.classList.toggle("hidden", !showTeacherForm);
+  $("#teacherFormationCards")?.classList.toggle("hidden", showTeacherForm);
+  $("#teachersListHeader")?.classList.toggle("hidden", showTeacherForm);
+  // Course form / list toggle within #coursesArea
+  $("#courseFormEl")?.classList.toggle("hidden", !showCourseForm);
+  $("#courseCards")?.classList.toggle("hidden", showCourseForm);
+  $("#coursesListHeader")?.classList.toggle("hidden", showCourseForm);
 }
 
 async function saveFormation(event) {
@@ -1270,6 +1517,89 @@ function startEditFormation(id) {
   state.selectedFormationId = null;
   fillFormationForm(formation);
   render();
+}
+
+function startEditTeacherFormation(id) {
+  const formation = state.formations.find((f) => f.id === id);
+  if (!formation) return;
+  state.editingFormationId = id;
+  state.teacherAdminFormView = "form";
+  state.selectedFormationId = null;
+  fillTeacherFormForm(formation);
+  render();
+}
+
+function startNewTeacherFormation() {
+  state.editingFormationId = null;
+  state.teacherAdminFormView = "form";
+  state.selectedFormationId = null;
+  resetTeacherFormForm();
+  render();
+}
+
+function resetTeacherFormForm() {
+  const form = $("#teacherFormForm");
+  if (!form) return;
+  form.reset();
+  const title = $("#teacherFormTitle");
+  if (title) title.textContent = "Cadastrar formação";
+  const btn = $("#teacherFormSubmitBtn");
+  if (btn) btn.textContent = "Salvar formação";
+  const hint = $("#teacherFormPhotoHint");
+  if (hint) hint.textContent = "";
+}
+
+function fillTeacherFormForm(formation) {
+  const form = $("#teacherFormForm");
+  if (!form) return;
+  form.elements.nome.value = formation.nome || "";
+  form.elements.cargaHoraria.value = formation.cargaHoraria || "";
+  form.elements.inicioFormacao.value = formation.inicioFormacao || "";
+  form.elements.fimFormacao.value = formation.fimFormacao || "";
+  form.elements.foto.value = "";
+  const title = $("#teacherFormTitle");
+  if (title) title.textContent = "Editar formação";
+  const btn = $("#teacherFormSubmitBtn");
+  if (btn) btn.textContent = "Salvar alterações";
+  const hint = $("#teacherFormPhotoHint");
+  if (hint) hint.textContent = formation.foto ? "Uma foto já está cadastrada. Escolha outra imagem apenas se quiser substituir." : "";
+}
+
+async function saveTeacherFormation(event) {
+  event.preventDefault();
+  await withButtonBusy(event.submitter, "Salvando...", async () => {
+    const form = new FormData(event.target);
+    const nome = String(form.get("nome") || "").trim();
+    const editingFormation = state.formations.find((f) => f.id === state.editingFormationId);
+    const foto = await readImageFile(form.get("foto"));
+    const formation = editingFormation || { id: makeId(), rows: [], recursoMap: new Map(), createdAt: new Date().toISOString() };
+
+    formation.nome = nome;
+    formation.publico = "Professores";
+    formation.esperado = 0;
+    formation.cargaHoraria = String(form.get("cargaHoraria") || "").trim();
+    formation.inicioFormacao = String(form.get("inicioFormacao") || "").trim();
+    formation.fimFormacao = String(form.get("fimFormacao") || "").trim();
+    if (foto) formation.foto = foto;
+
+    if (!editingFormation) state.formations.push(formation);
+    try {
+      await persistFormation(formation);
+      state.dbConnected = true;
+      renderTopbarUser();
+      notify("Formação salva com sucesso", "Confirmado no banco de dados — visível em todos os navegadores.");
+    } catch (error) {
+      console.warn("Erro ao salvar no Supabase:", error);
+      saveStored("monitor-formations", state.formations);
+      state.dbConnected = false;
+      renderTopbarUser();
+      notify("Salvo apenas neste navegador", `Erro: ${error?.message || "Sem conexão"}. A formação NÃO aparecerá em outros dispositivos.`, "error");
+    }
+    state.editingFormationId = null;
+    state.teacherAdminFormView = "list";
+    resetTeacherFormForm();
+    render();
+  });
 }
 
 function openDeleteFormationDialog(id) {
@@ -1492,7 +1822,7 @@ function renderFormationCards() {
   if (state.formationMode !== "directors") return;
   const isAdmin = state.user?.perfil === "admin";
   $("#formationCards").innerHTML = state.formations
-    .filter((f) => f.id && f.nome)
+    .filter((f) => f.id && f.nome && !normalize(f.publico || "").includes("professor"))
     .map((formation) => {
       const formationRows = getFormationRows(formation);
       const s = summarizeFormation(formation);
@@ -2730,6 +3060,765 @@ function getGres() {
     (a, b) => Number(a.match(/\d+/)?.[0] || 0) - Number(b.match(/\d+/)?.[0] || 0),
   );
 }
+
+// ─── PROFESSORES ────────────────────────────────────────────────────────────
+
+async function ensureTeacherFormation() {
+  const existing = state.formations.find((f) => normalize(f.publico || "").includes("professor"));
+  if (existing) return existing.id;
+
+  const f = {
+    id: makeId(),
+    nome: "Formação de Professores 2026",
+    publico: "Professores",
+    esperado: 0,
+    foto: "",
+    rows: [],
+    recursoMap: new Map(),
+    createdAt: new Date().toISOString(),
+    dataEvento: "",
+    prazoInscricoes: "",
+    prazoRecursoInscricao: "",
+    prazoRecursoCredenciamento: "",
+  };
+
+  if (db) {
+    try {
+      const { data, error } = await db.from("formacoes").upsert(toDbFormation(f), { onConflict: "id" }).select("id").single();
+      if (!error && data?.id) f.id = data.id;
+    } catch { /* usa id local */ }
+  }
+
+  state.formations.push(f);
+  saveStored("monitor-teacher-formation-id", f.id);
+  return f.id;
+}
+
+async function loadTeacherRowsFromDb(formacaoId) {
+  const localKey = "monitor-teacher-rows-" + formacaoId;
+  const localRows = loadStored(localKey, []);
+  if (!db) return localRows;
+  try {
+    const rows = await selectAllDbRows("professor_dados", "nome,email,inep,conclusao,media,resultado,curso_id", (q) =>
+      q.eq("formacao_id", formacaoId).order("nome")
+    );
+    const schoolByInep = new Map();
+    (state.base?.schools || []).forEach((s) => schoolByInep.set(String(s.inep), s));
+    const mapped = rows.map((r) => {
+      const school = schoolByInep.get(String(r.inep || ""));
+      return {
+        nome: r.nome || "",
+        email: r.email || "",
+        inep: String(r.inep || ""),
+        gre: school?.gre || "",
+        escola: school?.escola || "",
+        conclusao: Number(r.conclusao || 0),
+        media: Number(r.media || 0),
+        resultado: r.resultado || "",
+        cursoId: r.curso_id || null,
+      };
+    });
+    saveStored(localKey, mapped);
+    return mapped;
+  } catch {
+    return localRows;
+  }
+}
+
+async function persistTeacherRows(formacaoId, rows, cursoId = null) {
+  saveStored("monitor-teacher-rows-" + formacaoId, rows);
+  if (!db) return false;
+  try {
+    notify("Salvando no banco...", `${rows.length.toLocaleString("pt-BR")} professores — pode levar alguns segundos.`, "warning");
+    let delQuery = db.from("professor_dados").delete().eq("formacao_id", formacaoId);
+    if (cursoId) delQuery = delQuery.eq("curso_id", cursoId);
+    const { error: delErr } = await delQuery;
+    if (delErr) throw delErr;
+    const dbRows = rows.map((r) => ({
+      formacao_id: formacaoId,
+      curso_id: cursoId || null,
+      nome: r.nome,
+      email: r.email,
+      inep: r.inep,
+      conclusao: r.conclusao,
+      media: r.media || 0,
+      resultado: r.resultado || "",
+    }));
+    const chunkSize = 500;
+    for (let i = 0; i < dbRows.length; i += chunkSize) {
+      const { error } = await db.from("professor_dados").insert(dbRows.slice(i, i + chunkSize));
+      if (error) throw error;
+    }
+    return true;
+  } catch (err) {
+    console.warn("Não foi possível salvar professores no Supabase.", err);
+    return false;
+  }
+}
+
+function parseTeacherRows(rows2D) {
+  if (!rows2D.length) return [];
+  const rawHeaders = rows2D[0].map((h) => normalizeKey(String(h ?? "")));
+  const idx = {};
+  rawHeaders.forEach((h, i) => { if (!(h in idx)) idx[h] = i; });
+
+  // busca exata, depois por prefixo (lida com headers longos como "Conclusão (Clique...)")
+  const col = (row, ...keys) => {
+    for (const k of keys) {
+      if (idx[k] !== undefined) return String(row[idx[k]] ?? "").trim();
+      const prefixKey = Object.keys(idx).find((h) => h.startsWith(k) || k.startsWith(h));
+      if (prefixKey !== undefined) return String(row[idx[prefixKey]] ?? "").trim();
+    }
+    return "";
+  };
+
+  const schoolByInep = new Map();
+  (state.base?.schools || []).forEach((s) => schoolByInep.set(String(s.inep), s));
+
+  const rows = [];
+  rows2D.slice(1).forEach((row) => {
+    const inep = col(row, "inep", "codigoinep", "codinep");
+    if (!inep) return;
+    const nome = col(row, "nome", "nomeservidor", "nomeprofessor");
+    const email = col(row, "email", "emailservidor");
+    const conclusaoRaw = col(row, "conclusao", "conclusao2026", "percentual", "pct", "progresso");
+
+    let conclusao = 0;
+    if (conclusaoRaw) {
+      const clean = conclusaoRaw.replace(",", ".").replace("%", "").trim();
+      const num = parseFloat(clean);
+      if (!isNaN(num)) conclusao = num > 1.5 ? Math.min(100, num) : Math.round(num * 100);
+    }
+
+    const mediaRaw = col(row, "mediadanota", "media", "nota", "mediadadanota");
+    const media = mediaRaw ? Math.max(0, parseFloat(mediaRaw.replace(",", ".")) || 0) : 0;
+
+    const resultadoRaw = col(row, "resultado", "status", "situacao");
+    const resultado = resultadoRaw || (conclusao >= 100 ? "Concluído" : conclusao > 0 ? "Em andamento" : "Não iniciado");
+
+    const school = schoolByInep.get(inep);
+    rows.push({ nome, email, inep, gre: school?.gre || "", escola: school?.escola || "", conclusao, media, resultado });
+  });
+  return rows;
+}
+
+async function importTeacherCsv(file) {
+  await withButtonBusy($("#importTeacherBtn"), "Importando...", async () => {
+    if (!state.teacherFormationId) {
+      notify("Erro", "Formação de professores não encontrada.", "error");
+      return;
+    }
+    showPageLoader();
+    try {
+      let rows2D;
+      if (/\.xlsx?$/i.test(file.name)) {
+        const buffer = await file.arrayBuffer();
+        const wb = window.XLSX.read(buffer, { type: "array" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        rows2D = window.XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+      } else {
+        rows2D = parseCsv(await file.text());
+      }
+      const rows = parseTeacherRows(rows2D);
+      if (!rows.length) throw new Error("Nenhum dado encontrado. Verifique se a planilha tem as colunas NOME, EMAIL, INEP, CONCLUSÃO.");
+
+      const cursoId = state.selectedCourseId || null;
+      const taggedRows = rows.map((r) => ({ ...r, cursoId }));
+      // Merge: keep rows of other courses, replace rows of this course
+      state.teacherRows = [
+        ...state.teacherRows.filter((r) => r.cursoId !== cursoId),
+        ...taggedRows,
+      ];
+      const savedToDb = await persistTeacherRows(state.teacherFormationId, taggedRows, cursoId);
+
+      const ts = $("#teacherImportTimestamp");
+      if (ts) {
+        ts.textContent = "Atualizado em " + formatDateTime(new Date().toISOString());
+        ts.classList.remove("hidden");
+      }
+      hidePageLoader();
+      notify(
+        savedToDb ? "Importação concluída" : "Importação salva localmente",
+        `${rows.length.toLocaleString("pt-BR")} professores carregados.`,
+        savedToDb ? "success" : "warning",
+      );
+      renderTeachersArea();
+    } catch (err) {
+      hidePageLoader();
+      notify("Erro na importação", err.message || "Verifique o formato do arquivo.", "error");
+    }
+  });
+}
+
+function getTeacherSchoolRows() {
+  const isAdmin = state.user?.perfil === "admin";
+  const userGre = state.user?.gre;
+  const schoolByInep = new Map();
+  (state.base?.schools || []).forEach((s) => schoolByInep.set(String(s.inep), s));
+
+  const byInep = new Map();
+  state.teacherRows.forEach((r) => {
+    if (!isAdmin && userGre && r.gre !== userGre) return;
+    if (state.selectedCourseId && r.cursoId !== state.selectedCourseId) return;
+    if (!byInep.has(r.inep)) {
+      const school = schoolByInep.get(r.inep);
+      byInep.set(r.inep, {
+        gre: r.gre || school?.gre || "",
+        inep: r.inep,
+        escola: r.escola || school?.escola || "",
+        esperado: school?.professores || 0,
+        total: 0,
+        concluidos: 0,
+        somaMedia: 0,
+      });
+    }
+    const entry = byInep.get(r.inep);
+    entry.total++;
+    if (r.resultado === "Concluído") entry.concluidos++;
+    entry.somaMedia += r.media || 0;
+  });
+
+  return Array.from(byInep.values()).map((e) => ({
+    gre: e.gre,
+    inep: e.inep,
+    escola: e.escola,
+    esperado: e.esperado,
+    total: e.total,
+    concluidos: e.concluidos,
+    mediaEscola: e.total > 0 ? Math.round((e.somaMedia / e.total) * 10) / 10 : 0,
+    pct: e.esperado > 0 ? Math.round((e.concluidos / e.esperado) * 100) : (e.total > 0 ? Math.round((e.concluidos / e.total) * 100) : 0),
+  }));
+}
+
+function filteredTeacherPersonRows() {
+  const isAdmin = state.user?.perfil === "admin";
+  const userGre = state.user?.gre;
+  const q = normalize(state.teachersSearch || "");
+  const greF = state.teachersGreFilter;
+  const concF = state.teachersConclusaoFilter;
+
+  return state.teacherRows.filter((r) => {
+    if (!isAdmin && userGre && r.gre !== userGre) return false;
+    if (greF !== "todos" && r.gre !== greF) return false;
+    if (concF !== "todos" && r.resultado !== concF) return false;
+    if (q) {
+      const text = normalize(`${r.nome} ${r.email} ${r.inep} ${r.escola} ${r.gre}`);
+      if (!text.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function filteredTeacherSchoolRows() {
+  const schools = getTeacherSchoolRows();
+  const q = normalize(state.teachersSearch || "");
+  const greF = state.teachersGreFilter;
+  const concF = state.teachersConclusaoFilter;
+
+  return schools.filter((s) => {
+    if (greF !== "todos" && s.gre !== greF) return false;
+    if (concF === "Concluído" && s.concluidos === 0) return false;
+    if (concF === "Não iniciado" && s.concluidos > 0) return false;
+    if (q) {
+      const text = normalize(`${s.gre} ${s.inep} ${s.escola}`);
+      if (!text.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function renderCoursesList() {
+  const container = $("#courseCards");
+  if (!container || state.formationMode !== "courses") return;
+  const isAdmin = state.user?.perfil === "admin";
+  const formacaoId = state.teacherFormationId;
+  const formation = state.formations.find((f) => f.id === formacaoId);
+  const nameEl = $("#coursesFormationName");
+  if (nameEl) nameEl.textContent = formation?.nome || "Cursos";
+
+  const courses = state.courses.filter((c) => c.formacaoId === formacaoId);
+  const iconClock = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
+
+  container.innerHTML = courses.map((c) => {
+    const rows = state.teacherRows.filter((r) => r.cursoId === c.id);
+    const naplanilha = rows.length;
+    const concluidos = rows.filter((r) => r.resultado === "Concluído").length;
+    const pct = naplanilha > 0 ? Math.round((concluidos / naplanilha) * 100) : 0;
+    const cargaTag = c.cargaHoraria ? `<span class="formation-tag">${iconClock}${esc(c.cargaHoraria)}</span>` : "";
+    const trilhaStyle = c.trilha ? TRILHA_COLORS[c.trilha] : null;
+    const trilhaTag = trilhaStyle
+      ? `<span class="formation-tag" style="background:${trilhaStyle.bg};border-color:${trilhaStyle.border};color:${trilhaStyle.color}">${esc(c.trilha)}</span>`
+      : "";
+    const allTags = [cargaTag, trilhaTag].filter(Boolean).join("");
+    return `
+      <article class="event-card">
+        ${c.foto ? `<img class="event-photo" src="${esc(c.foto)}" alt="" />` : ""}
+        <div class="event-card-top">
+          <span class="event-type">Curso</span>
+        </div>
+        <strong>${esc(c.nome)}</strong>
+        ${allTags ? `<div class="formation-tags">${allTags}</div>` : ""}
+        <small>${naplanilha.toLocaleString("pt-BR")} na planilha · ${concluidos.toLocaleString("pt-BR")} concluídos</small>
+        <div class="event-progress"><span style="width:${Math.min(100, pct)}%"></span></div>
+        <div class="event-foot"><span>${pct}% conclusão</span></div>
+        <div class="card-actions">
+          ${isAdmin ? `<button class="mini-button" data-edit-course="${esc(c.id)}">Editar</button>` : ""}
+          ${isAdmin ? `<button class="mini-button danger-button" data-delete-course="${esc(c.id)}">Excluir</button>` : ""}
+          <button class="mini-button" data-open-course="${esc(c.id)}">Abrir</button>
+        </div>
+      </article>
+    `;
+  }).join("") || `<p class="muted" style="padding:24px">Nenhum curso cadastrado para esta formação.</p>`;
+
+  container.querySelectorAll("[data-open-course]").forEach((b) => {
+    b.addEventListener("click", () => openCourseMetrics(b.dataset.openCourse));
+  });
+  container.querySelectorAll("[data-edit-course]").forEach((b) => {
+    b.addEventListener("click", () => startEditCourse(b.dataset.editCourse));
+  });
+  container.querySelectorAll("[data-delete-course]").forEach((b) => {
+    b.addEventListener("click", () => confirmDeleteCourse(b.dataset.deleteCourse));
+  });
+}
+
+function resetCourseForm() {
+  const form = $("#courseFormEl");
+  if (!form) return;
+  form.reset();
+  const title = $("#courseFormTitle");
+  if (title) title.textContent = "Cadastrar curso";
+  const btn = $("#courseFormSubmitBtn");
+  if (btn) btn.textContent = "Salvar curso";
+  const hint = $("#courseFormPhotoHint");
+  if (hint) hint.textContent = "";
+}
+
+function fillCourseForm(course) {
+  const form = $("#courseFormEl");
+  if (!form) return;
+  form.elements.nome.value = course.nome || "";
+  form.elements.cargaHoraria.value = course.cargaHoraria || "";
+  form.elements.trilha.value = course.trilha || "";
+  form.elements.foto.value = "";
+  const title = $("#courseFormTitle");
+  if (title) title.textContent = "Editar curso";
+  const btn = $("#courseFormSubmitBtn");
+  if (btn) btn.textContent = "Salvar alterações";
+  const hint = $("#courseFormPhotoHint");
+  if (hint) hint.textContent = course.foto ? "Uma foto já está cadastrada. Escolha outra imagem apenas se quiser substituir." : "";
+}
+
+function startNewCourse() {
+  state.editingCourseId = null;
+  state.courseAdminFormView = "form";
+  resetCourseForm();
+  render();
+}
+
+function startEditCourse(id) {
+  const course = state.courses.find((c) => c.id === id);
+  if (!course) return;
+  state.editingCourseId = id;
+  state.courseAdminFormView = "form";
+  fillCourseForm(course);
+  render();
+}
+
+async function saveCourse(event) {
+  event.preventDefault();
+  await withButtonBusy(event.submitter, "Salvando...", async () => {
+    const form = new FormData(event.target);
+    const nome = String(form.get("nome") || "").trim();
+    const editingCourse = state.courses.find((c) => c.id === state.editingCourseId);
+    const foto = await readImageFile(form.get("foto"));
+    const course = editingCourse || { id: makeId(), formacaoId: state.teacherFormationId, createdAt: new Date().toISOString() };
+
+    course.nome = nome;
+    course.cargaHoraria = String(form.get("cargaHoraria") || "").trim();
+    course.trilha = String(form.get("trilha") || "").trim();
+    if (foto) course.foto = foto;
+
+    if (!editingCourse) state.courses.push(course);
+    try {
+      await persistCourse(course);
+      notify("Curso salvo com sucesso", "Confirmado no banco de dados.");
+    } catch (error) {
+      saveStored("monitor-courses", state.courses);
+      notify("Salvo localmente", `Erro: ${error?.message || "Sem conexão"}`, "warning");
+    }
+    state.editingCourseId = null;
+    state.courseAdminFormView = "list";
+    resetCourseForm();
+    render();
+    renderCoursesList();
+  });
+}
+
+function confirmDeleteCourse(id) {
+  const course = state.courses.find((c) => c.id === id);
+  if (!course) return;
+  if (!window.confirm(`Excluir o curso "${course.nome}"? Esta ação não pode ser desfeita.`)) return;
+  state.courses = state.courses.filter((c) => c.id !== id);
+  saveStored("monitor-courses", state.courses);
+  deleteCourseFromDb(id).catch((err) => console.warn("Erro ao excluir curso:", err));
+  notify("Curso excluído", `${course.nome} foi removido.`);
+  render();
+  renderCoursesList();
+}
+
+function renderTeacherListCards() {
+  const container = $("#teacherFormationCards");
+  if (!container || state.formationMode !== "teachers-list") return;
+  const isAdmin = state.user?.perfil === "admin";
+  const formations = state.formations.filter((f) => f.id && f.nome && normalize(f.publico || "").includes("professor"));
+  const schools = state.base?.schools || [];
+  const userGre = state.user?.gre;
+
+  container.innerHTML = formations.map((f) => {
+    const totalEsp = isAdmin
+      ? schools.reduce((s, sc) => s + (sc.professores || 0), 0)
+      : schools.filter((sc) => sc.gre === userGre).reduce((s, sc) => s + (sc.professores || 0), 0);
+    const rows = state.teacherFormationId === f.id ? state.teacherRows : [];
+    const naplanilha = rows.length;
+    const concluidos = rows.filter((r) => r.resultado === "Concluído").length;
+    const pct = totalEsp > 0 ? Math.round((concluidos / totalEsp) * 100) : 0;
+    const ts = f.lastImportedAt ? `<small class="event-updated">Base atualizada em ${esc(formatDateTime(f.lastImportedAt))}</small>` : "";
+    const iconClock = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
+    const iconCal = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`;
+    const cargaTag = f.cargaHoraria ? `<span class="formation-tag">${iconClock}${esc(f.cargaHoraria)}</span>` : "";
+    const periodoTag = (f.inicioFormacao || f.fimFormacao)
+      ? `<span class="formation-tag">${iconCal}${f.inicioFormacao ? formatDate(f.inicioFormacao) : ""}${f.inicioFormacao && f.fimFormacao ? " — " : ""}${f.fimFormacao ? formatDate(f.fimFormacao) : ""}</span>`
+      : "";
+    return `
+      <article class="event-card">
+        ${f.foto ? `<img class="event-photo" src="${esc(f.foto)}" alt="" />` : ""}
+        <div class="event-card-top">
+          <span class="event-type">Professores</span>
+        </div>
+        <strong>${esc(f.nome)}</strong>
+        ${cargaTag || periodoTag ? `<div class="formation-tags">${cargaTag}${periodoTag}</div>` : ""}
+        ${ts}
+        <small>${naplanilha.toLocaleString("pt-BR")} na planilha · ${concluidos.toLocaleString("pt-BR")} concluídos</small>
+        <div class="event-progress"><span style="width:${Math.min(100,pct)}%"></span></div>
+        <div class="event-foot">
+          <span>${pct}% conclusão</span>
+        </div>
+        <div class="card-actions">
+          ${isAdmin ? `<button class="mini-button" data-edit-teacher-formation="${esc(f.id)}">Editar</button>` : ""}
+          ${isAdmin ? `<button class="mini-button danger-button" data-delete-teacher-formation="${esc(f.id)}">Excluir</button>` : ""}
+          <button class="mini-button" data-open-teacher-formation="${esc(f.id)}">Abrir</button>
+        </div>
+      </article>
+    `;
+  }).join("") || `<p class="muted" style="padding:24px">Nenhuma formação de professores cadastrada.</p>`;
+
+  container.querySelectorAll("[data-open-teacher-formation]").forEach((b) => {
+    b.addEventListener("click", () => openCoursesArea(b.dataset.openTeacherFormation));
+  });
+  container.querySelectorAll("[data-edit-teacher-formation]").forEach((b) => {
+    b.addEventListener("click", () => startEditTeacherFormation(b.dataset.editTeacherFormation));
+  });
+  container.querySelectorAll("[data-delete-teacher-formation]").forEach((b) => {
+    b.addEventListener("click", () => openDeleteFormationDialog(b.dataset.deleteTeacherFormation));
+  });
+}
+
+function renderTeachersArea() {
+  if (state.formationMode !== "teachers") return;
+
+  const isAdmin = state.user?.perfil === "admin";
+  // Update header to show course name when a course is selected
+  const currentCourse = state.selectedCourseId ? state.courses.find((c) => c.id === state.selectedCourseId) : null;
+  const headerNameEl = $("#teacherFormationName");
+  if (headerNameEl) {
+    const formation = state.formations.find((f) => f.id === state.teacherFormationId);
+    headerNameEl.textContent = currentCourse ? currentCourse.nome : (formation?.nome || "Formação de Professores 2026");
+  }
+  const schoolRows = getTeacherSchoolRows();
+  const allPersonRows = (() => {
+    const userGre = state.user?.gre;
+    let rows = isAdmin ? state.teacherRows : state.teacherRows.filter((r) => r.gre === userGre);
+    if (state.selectedCourseId) rows = rows.filter((r) => r.cursoId === state.selectedCourseId);
+    return rows;
+  })();
+
+  // Métricas — total esperado: admin = global, regional = só sua GRE
+  const schools = state.base?.schools || [];
+  const totalEsperado = isAdmin
+    ? schools.reduce((s, sc) => s + (sc.professores || 0), 0)
+    : schools.filter((sc) => sc.gre === state.user?.gre).reduce((s, sc) => s + (sc.professores || 0), 0);
+  const totalInscritos = allPersonRows.length;
+  const totalConcluidos = allPersonRows.filter((r) => r.resultado === "Concluído").length;
+  const totalEmAndamento = allPersonRows.filter((r) => r.resultado === "Em andamento").length;
+  const pctGeral = totalInscritos > 0 ? Math.round((totalConcluidos / totalInscritos) * 100) : 0;
+  const totalEscolas = schoolRows.length;
+  const escolasConcluidas = schoolRows.filter((s) => s.pct >= 75).length;
+
+  const metricsEl = $("#teacherMetrics");
+  if (metricsEl) {
+    const variants = ["metric-primary", "metric-accent", "metric-ok", "metric-wait", "metric-ok"];
+    const items = [
+      { label: "Professores esperados", value: totalEsperado.toLocaleString("pt-BR"), icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>` },
+      { label: "Professores na planilha", value: totalInscritos.toLocaleString("pt-BR"), icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="8" x2="16" y1="13" y2="13"/><line x1="8" x2="16" y1="17" y2="17"/></svg>` },
+      { label: "Concluídos", value: totalConcluidos.toLocaleString("pt-BR"), icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>` },
+      { label: "Em andamento", value: totalEmAndamento.toLocaleString("pt-BR"), icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>` },
+      { label: "Taxa de conclusão", value: `${pctGeral}%`, icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="18" y1="20" y2="10"/><line x1="12" x2="12" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="14"/></svg>` },
+    ];
+    metricsEl.innerHTML = items.map((m, i) => `
+      <div class="metric panel ${variants[i]}">
+        <div class="metric-icon">${m.icon}</div>
+        <span>${m.label}</span>
+        <strong>${m.value}</strong>
+      </div>
+    `).join("");
+  }
+
+  // Gráfico GRE (admin) / Insight regional
+  if (isAdmin) {
+    renderTeacherGreBars(schoolRows);
+    $("#teacherRegionalInsight")?.classList.add("hidden");
+  } else {
+    const insightEl = $("#teacherRegionalInsight");
+    if (insightEl) {
+      insightEl.classList.remove("hidden");
+      const pct = pctGeral;
+      const gauge = $("#teacherRegionalGauge");
+      if (gauge) {
+        const ranges = [
+          { color: "#22c55e", test: (v) => v >= 90 },
+          { color: "#38bdf8", test: (v) => v >= 50 },
+          { color: "#f59e0b", test: (v) => v >= 30 },
+          { color: "#ef4444", test: () => true },
+        ];
+        const color = (ranges.find((r) => r.test(pct)) || ranges.at(-1)).color;
+        gauge.style.background = `conic-gradient(${color} 0 ${pct}%, rgba(255,255,255,0.08) ${pct}% 100%)`;
+        gauge.style.setProperty("--pie-glow", `${color}70`);
+        gauge.style.setProperty("--pie-glow-far", `${color}28`);
+      }
+      if ($("#teacherRegionalPercent")) $("#teacherRegionalPercent").textContent = `${pct}%`;
+      if ($("#teacherRegionalSummary")) $("#teacherRegionalSummary").textContent = `${totalConcluidos.toLocaleString("pt-BR")} de ${totalInscritos.toLocaleString("pt-BR")} professores concluíram`;
+      if ($("#teacherRegionalHint")) $("#teacherRegionalHint").textContent = pct >= 100 ? "Todos os professores concluíram!" : `${(totalInscritos - totalConcluidos).toLocaleString("pt-BR")} professores ainda não concluíram.`;
+      if ($("#teacherRegionalDoneLabel")) $("#teacherRegionalDoneLabel").textContent = `Concluídos ${totalConcluidos.toLocaleString("pt-BR")}`;
+      if ($("#teacherRegionalPendingLabel")) $("#teacherRegionalPendingLabel").textContent = `Pendentes ${(totalInscritos - totalConcluidos).toLocaleString("pt-BR")}`;
+    }
+  }
+
+  // GRE filter options
+  const greFilter = $("#teacherGreFilter");
+  if (greFilter && isAdmin) {
+    const gres = [...new Set(state.teacherRows.map((r) => r.gre).filter(Boolean))].sort((a, b) => getGreNumber(a) - getGreNumber(b));
+    const prev = greFilter.value;
+    greFilter.innerHTML = `<option value="todos">GRE: Todas</option>` + gres.map((g) => `<option value="${esc(g)}">${esc(g)}</option>`).join("");
+    if (gres.includes(prev)) greFilter.value = prev;
+  }
+
+  // View toggle sync
+  $$("[data-teacher-view]").forEach((b) => b.classList.toggle("active", b.dataset.teacherView === state.teachersView));
+
+  // Table
+  renderTeachersTable();
+}
+
+function renderTeacherGreBars(schoolRows) {
+  const byGre = new Map();
+  schoolRows.forEach((s) => {
+    if (!byGre.has(s.gre)) byGre.set(s.gre, { esperado: 0, concluidos: 0 });
+    const e = byGre.get(s.gre);
+    e.esperado += s.esperado || s.total;
+    e.concluidos += s.concluidos;
+  });
+
+  const entries = [...byGre.entries()]
+    .filter(([gre]) => gre && /\d/.test(gre))
+    .map(([gre, item]) => ({
+      gre,
+      esperado: item.esperado,
+      concluidos: item.concluidos,
+      percent: item.esperado > 0 ? Math.round((item.concluidos / item.esperado) * 100) : 0,
+    }))
+    .sort((a, b) => getGreNumber(a.gre) - getGreNumber(b.gre));
+
+  const ranges = [
+    { key: "high",    color: "#22c55e", label: "90% ou mais",   test: (v) => v >= 90 },
+    { key: "midHigh", color: "#38bdf8", label: "50% a 89%",     test: (v) => v >= 50 && v < 90 },
+    { key: "midLow",  color: "#f59e0b", label: "30% a 49%",     test: (v) => v >= 30 && v < 50 },
+    { key: "low",     color: "#ef4444", label: "Abaixo de 30%", test: (v) => v < 30 },
+  ];
+  const rangeFor = (v) => ranges.find((r) => r.test(v)) || ranges.at(-1);
+  const maxPercent = Math.max(100, ...entries.map((e) => e.percent));
+  const totalConcluidos = entries.reduce((s, e) => s + e.concluidos, 0);
+  const totalEsperado = entries.reduce((s, e) => s + e.esperado, 0);
+  const overallPercent = totalEsperado > 0 ? Math.round((totalConcluidos / totalEsperado) * 100) : 0;
+
+  const barsEl = $("#teacherGreBars");
+  if (barsEl) {
+    barsEl.innerHTML = entries.map((item) => {
+      const range = rangeFor(item.percent);
+      const fillH = Math.max(4, Math.round((item.percent / maxPercent) * 100));
+      const sel = $("#teacherGreFilter")?.value === item.gre ? " selected" : "";
+      return `
+        <button class="goal-bar goal-${range.key}${sel}" type="button" data-teacher-gre="${esc(item.gre)}" title="${esc(`${item.gre}: ${item.concluidos}/${item.esperado} concluídos (${item.percent}%)`)}">
+          <span class="goal-fill" style="height:${fillH}%" data-pct="${item.percent}%">
+            <span class="goal-count">${item.concluidos}/${item.esperado}</span>
+          </span>
+          <span class="goal-label">${esc(item.gre.replace(" GRE", ""))}<small>GRE</small></span>
+        </button>
+      `;
+    }).join("");
+
+    $$("#teacherGreBars [data-teacher-gre]").forEach((bar) => {
+      bar.addEventListener("click", () => {
+        const greFilter = $("#teacherGreFilter");
+        if (!greFilter) return;
+        greFilter.value = greFilter.value === bar.dataset.teacherGre ? "todos" : bar.dataset.teacherGre;
+        state.teachersGreFilter = greFilter.value;
+        renderTeachersArea();
+      });
+    });
+  }
+
+  const legendEl = $("#teacherGreBarLegend");
+  if (legendEl) legendEl.innerHTML = ranges.map((r) => `<span><i style="background:${r.color};border-radius:3px"></i>${r.label}</span>`).join("");
+
+  const pieEl = $("#teacherGrePie");
+  if (pieEl) {
+    const range = rangeFor(overallPercent);
+    pieEl.style.background = `conic-gradient(${range.color} 0 ${overallPercent}%, rgba(255,255,255,0.08) ${overallPercent}% 100%)`;
+    pieEl.style.setProperty("--pie-glow", `${range.color}70`);
+    pieEl.style.setProperty("--pie-glow-far", `${range.color}28`);
+    pieEl.innerHTML = `<strong>${overallPercent}%</strong><span>${totalConcluidos.toLocaleString("pt-BR")}<br>concluídos</span>`;
+
+    let infoEl = $("#teacherGrePieInfo");
+    if (!infoEl) {
+      infoEl = document.createElement("div");
+      infoEl.id = "teacherGrePieInfo";
+      infoEl.className = "goal-pie-info";
+      pieEl.parentElement.appendChild(infoEl);
+    }
+    infoEl.innerHTML = `<strong style="color:${range.color}">${totalConcluidos.toLocaleString("pt-BR")}</strong><small>de ${totalEsperado.toLocaleString("pt-BR")} esperados</small>`;
+  }
+}
+
+function renderTeachersTable() {
+  const headEl = $("#teacherTableHead");
+  const bodyEl = $("#teacherTable");
+  const titleEl = $("#teacherTableTitle");
+  const countEl = $("#teacherResultCount");
+  if (!headEl || !bodyEl) return;
+
+  const pctColor = (v) => {
+    if (v >= 90) return "#22c55e";
+    if (v >= 50) return "#38bdf8";
+    if (v >= 30) return "#f59e0b";
+    return "#ef4444";
+  };
+  const resultadoPill = (res) => {
+    const map = { "Concluído": "ok", "Em andamento": "wait", "Não iniciado": "no" };
+    return `<span class="pill ${map[res] || "no"}">${esc(res || "Não iniciado")}</span>`;
+  };
+
+  const colgroupEl = $("#teacherColgroup");
+
+  if (state.teachersView === "school") {
+    const rows = filteredTeacherSchoolRows();
+    if (titleEl) titleEl.textContent = "Por escola";
+    if (countEl) countEl.textContent = `${rows.length} escola${rows.length !== 1 ? "s" : ""}`;
+
+    if (colgroupEl) colgroupEl.innerHTML = `
+      <col style="width:72px">
+      <col style="width:96px">
+      <col style="width:300px">
+      <col style="width:88px">
+      <col style="width:100px">
+      <col style="width:100px">
+      <col style="width:160px">`;
+
+    headEl.innerHTML = `<tr>
+      <th>GRE</th><th>INEP</th><th>Escola</th>
+      <th class="th-num">Esperados</th><th class="th-num">Na planilha</th><th class="th-num">Concluídos</th><th class="th-num">Porcentagem</th>
+    </tr>`;
+
+    bodyEl.innerHTML = rows.map((s) => {
+      const color = pctColor(s.pct);
+      return `<tr>
+        <td class="td-gre">${esc(s.gre)}</td>
+        <td><code class="inep-code">${esc(s.inep)}</code></td>
+        <td class="td-escola"><strong>${esc(s.escola)}</strong></td>
+        <td class="td-num">${s.esperado.toLocaleString("pt-BR")}</td>
+        <td class="td-num">${s.total.toLocaleString("pt-BR")}</td>
+        <td class="td-num">${s.concluidos.toLocaleString("pt-BR")}</td>
+        <td>
+          <div class="pct-bar-wrap">
+            <div class="pct-bar-track">
+              <div class="pct-bar-fill" style="width:${Math.min(100, s.pct)}%;background:${color}"></div>
+            </div>
+            <span class="pct-bar-label" style="color:${color}">${s.pct}%</span>
+          </div>
+        </td>
+      </tr>`;
+    }).join("") || `<tr><td colspan="7" class="empty-row">Nenhuma escola encontrada.</td></tr>`;
+
+  } else {
+    const rows = filteredTeacherPersonRows();
+    if (titleEl) titleEl.textContent = "Por professor";
+    if (countEl) countEl.textContent = `${rows.length} professor${rows.length !== 1 ? "es" : ""}`;
+
+    if (colgroupEl) colgroupEl.innerHTML = `
+      <col style="width:72px">
+      <col style="width:96px">
+      <col style="width:220px">
+      <col style="width:240px">
+      <col style="width:160px">
+      <col style="width:70px">
+      <col style="width:130px">`;
+
+    headEl.innerHTML = `<tr>
+      <th>GRE</th><th>INEP</th><th>Escola</th><th>Nome</th><th class="th-num">Conclusão</th><th class="th-num">Média</th><th>Resultado</th>
+    </tr>`;
+
+    bodyEl.innerHTML = rows.map((r) => {
+      const color = pctColor(r.conclusao);
+      return `<tr>
+        <td class="td-gre">${esc(r.gre)}</td>
+        <td><code class="inep-code">${esc(r.inep)}</code></td>
+        <td class="td-escola" style="font-size:0.8rem">${esc(r.escola)}</td>
+        <td><strong>${esc(r.nome)}</strong>${r.email ? `<br><small class="muted">${esc(r.email)}</small>` : ""}</td>
+        <td>
+          <div class="pct-bar-wrap">
+            <div class="pct-bar-track">
+              <div class="pct-bar-fill" style="width:${Math.min(100, r.conclusao)}%;background:${color}"></div>
+            </div>
+            <span class="pct-bar-label" style="color:${color}">${r.conclusao}%</span>
+          </div>
+        </td>
+        <td class="td-num">${r.media > 0 ? r.media.toFixed(1) : "—"}</td>
+        <td>${resultadoPill(r.resultado)}</td>
+      </tr>`;
+    }).join("") || `<tr><td colspan="7" class="empty-row">Nenhum professor encontrado.</td></tr>`;
+  }
+}
+
+function downloadTeacherSpreadsheet() {
+  if (!window.XLSX) { notify("Erro", "Biblioteca XLSX não carregada.", "error"); return; }
+
+  let data, headers;
+  if (state.teachersView === "school") {
+    const rows = filteredTeacherSchoolRows();
+    headers = ["GRE", "INEP", "Escola", "Esperados", "Na planilha", "Concluídos", "Porcentagem (%)"];
+    data = rows.map((s) => [s.gre, s.inep, s.escola, s.esperado, s.total, s.concluidos, s.pct]);
+  } else {
+    const rows = filteredTeacherPersonRows();
+    headers = ["GRE", "INEP", "Escola", "Nome", "E-mail", "Conclusão (%)", "Média da Nota", "Resultado"];
+    data = rows.map((r) => [r.gre, r.inep, r.escola, r.nome, r.email, r.conclusao, r.media, r.resultado]);
+  }
+
+  const ws = window.XLSX.utils.aoa_to_sheet([headers, ...data]);
+  const wb = window.XLSX.utils.book_new();
+  window.XLSX.utils.book_append_sheet(wb, ws, "Professores");
+  window.XLSX.writeFile(wb, "professores_export.xlsx");
+}
+
+// ─── FIM PROFESSORES ─────────────────────────────────────────────────────────
 
 function parseCsv(text) {
   const rows = [];
