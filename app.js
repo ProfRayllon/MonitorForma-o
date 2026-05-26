@@ -3738,6 +3738,7 @@ function renderTeachersTable() {
     return `<span class="pill ${map[res] || "no"}">${esc(res || "Não iniciado")}</span>`;
   };
 
+  const strictAdmin = state.user?.perfil === "admin";
   const colgroupEl = $("#teacherColgroup");
 
   if (state.teachersView === "school") {
@@ -3745,27 +3746,35 @@ function renderTeachersTable() {
     if (titleEl) titleEl.textContent = "Por escola";
     if (countEl) countEl.textContent = `${rows.length} escola${rows.length !== 1 ? "s" : ""}`;
 
-    if (colgroupEl) colgroupEl.innerHTML = `
+    if (colgroupEl) colgroupEl.innerHTML = strictAdmin ? `
       <col style="width:72px">
       <col style="width:96px">
       <col style="width:300px">
       <col style="width:88px">
       <col style="width:100px">
       <col style="width:100px">
+      <col style="width:160px">` : `
+      <col style="width:72px">
+      <col style="width:96px">
+      <col style="width:340px">
+      <col style="width:100px">
+      <col style="width:100px">
       <col style="width:160px">`;
 
     headEl.innerHTML = `<tr>
       <th>GRE</th><th>INEP</th><th>Escola</th>
-      <th class="th-num">Esperados</th><th class="th-num">Na planilha</th><th class="th-num">Concluídos</th><th class="th-num">Porcentagem</th>
+      ${strictAdmin ? `<th class="th-num">Esperados</th>` : ""}
+      <th class="th-num">Inscritos</th><th class="th-num">Concluídos</th><th class="th-num">Porcentagem</th>
     </tr>`;
 
+    const colspan = strictAdmin ? 7 : 6;
     bodyEl.innerHTML = rows.map((s) => {
       const color = pctColor(s.pct);
       return `<tr>
         <td class="td-gre">${esc(s.gre)}</td>
         <td><code class="inep-code">${esc(s.inep)}</code></td>
         <td class="td-escola"><strong>${esc(s.escola)}</strong></td>
-        <td class="td-num">${s.esperado.toLocaleString("pt-BR")}</td>
+        ${strictAdmin ? `<td class="td-num">${s.esperado.toLocaleString("pt-BR")}</td>` : ""}
         <td class="td-num">${s.total.toLocaleString("pt-BR")}</td>
         <td class="td-num">${s.concluidos.toLocaleString("pt-BR")}</td>
         <td>
@@ -3777,7 +3786,7 @@ function renderTeachersTable() {
           </div>
         </td>
       </tr>`;
-    }).join("") || `<tr><td colspan="7" class="empty-row">Nenhuma escola encontrada.</td></tr>`;
+    }).join("") || `<tr><td colspan="${colspan}" class="empty-row">Nenhuma escola encontrada.</td></tr>`;
 
   } else {
     const rows = filteredTeacherPersonRows();
