@@ -2199,6 +2199,22 @@ option { color: #111; background: #fff; }
   filter: brightness(1.18);
   transform: scaleY(1.02);
 }
+.goal-chart.has-selection .goal-bar:not(.selected) .goal-fill {
+  filter: grayscale(1) saturate(0.15) brightness(0.52);
+  opacity: 0.42;
+}
+.goal-chart.has-selection .goal-bar:not(.selected) .goal-fill::before,
+.goal-chart.has-selection .goal-bar:not(.selected) .goal-count,
+.goal-chart.has-selection .goal-bar:not(.selected) .goal-label {
+  color: rgba(148,163,184,0.55);
+}
+.goal-chart.has-selection .goal-bar:not(.selected) {
+  cursor: pointer;
+}
+.goal-chart.has-selection .goal-bar.selected .goal-fill {
+  filter: brightness(1.22) saturate(1.08);
+  box-shadow: 0 -2px 16px rgba(124,58,237,0.35);
+}
 .goal-bar.selected .goal-label { color: var(--primary-2); }
 
 /* Percentual justo acima de cada barra via ::before */

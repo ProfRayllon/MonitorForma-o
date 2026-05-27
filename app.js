@@ -4336,10 +4336,12 @@ function renderTeacherGreBars(schoolRows, strictAdmin = true) {
 
   const barsEl = $("#teacherGreBars");
   if (barsEl) {
+    const selectedGre = $("#teacherGreFilter")?.value || "todos";
+    barsEl.classList.toggle("has-selection", selectedGre !== "todos");
     barsEl.innerHTML = entries.map((item) => {
       const range = rangeFor(item.percent);
       const fillH = Math.max(4, Math.round((item.percent / maxPercent) * 100));
-      const sel = $("#teacherGreFilter")?.value === item.gre ? " selected" : "";
+      const sel = selectedGre === item.gre ? " selected" : "";
       return `
         <button class="goal-bar goal-${range.key}${sel}" type="button" data-teacher-gre="${esc(item.gre)}" title="${esc(`${item.gre}: ${item.concluidos}/${item.base} concluídos (${item.percent}%)`)}">
           <span class="goal-fill" style="height:${fillH}%" data-pct="${item.percent}%">
