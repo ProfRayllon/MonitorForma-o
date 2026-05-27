@@ -3439,7 +3439,7 @@ function getTeacherSchoolRows() {
     total: e.total,
     concluidos: e.concluidos,
     mediaEscola: e.total > 0 ? Math.round((e.somaMedia / e.total) * 10) / 10 : 0,
-    pct: e.esperado > 0 ? Math.round((e.concluidos / e.esperado) * 100) : (e.total > 0 ? Math.round((e.concluidos / e.total) * 100) : 0),
+    pct: e.total > 0 ? Math.round((e.concluidos / e.total) * 100) : 0,
   }));
 }
 
@@ -4305,7 +4305,7 @@ function renderTeacherGreBars(schoolRows, strictAdmin = true) {
   schoolRows.forEach((s) => {
     if (!byGre.has(s.gre)) byGre.set(s.gre, { base: 0, concluidos: 0 });
     const e = byGre.get(s.gre);
-    e.base += strictAdmin ? (s.esperado || s.total) : s.total;
+    e.base += s.total;
     e.concluidos += s.concluidos;
   });
 
@@ -4330,7 +4330,7 @@ function renderTeacherGreBars(schoolRows, strictAdmin = true) {
   const totalConcluidos = entries.reduce((s, e) => s + e.concluidos, 0);
   const totalBase = entries.reduce((s, e) => s + e.base, 0);
   const overallPercent = totalBase > 0 ? Math.round((totalConcluidos / totalBase) * 100) : 0;
-  const pieLabel = strictAdmin ? "esperados" : "inscritos";
+  const pieLabel = "inscritos";
 
   const barsEl = $("#teacherGreBars");
   if (barsEl) {
