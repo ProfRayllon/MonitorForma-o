@@ -769,10 +769,35 @@ async function loadCourses() {
     const { data, error } = await db.from("cursos").select("*").order("created_at", { ascending: true });
     if (error) throw error;
     const importStats = await loadCourseImportStats();
-    const courses = mergeCourseImportStats((data || []).map(fromDbCourse), importStats);
+    const dbCourses = mergeCourseImportStats((data || []).map(fromDbCourse), importStats);
+    const courses = await syncLocalCoursesToDb(local, dbCourses, importStats);
     saveStored("monitor-courses", courses);
     return courses;
   } catch { return local; }
+}
+
+async function syncLocalCoursesToDb(localCourses, dbCourses, importStats = new Map()) {
+  if (!db || !localCourses?.length) return dbCourses;
+  const byId = new Set(dbCourses.map((course) => course.id));
+  const byName = new Set(dbCourses.map((course) => `${course.formacaoId}|${normalize(course.nome)}`));
+  const pending = localCourses.filter((course) =>
+    course?.id &&
+    course?.formacaoId &&
+    course?.nome &&
+    !byId.has(course.id) &&
+    !byName.has(`${course.formacaoId}|${normalize(course.nome)}`)
+  );
+  if (!pending.length) return dbCourses;
+
+  try {
+    const { error } = await db.from("cursos").upsert(pending.map(toDbCourse), { onConflict: "id" });
+    if (error) throw error;
+    const synced = mergeCourseImportStats(pending.map((course) => ({ ...course })), importStats);
+    return [...dbCourses, ...synced].sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || "")));
+  } catch (error) {
+    console.warn("Não foi possível sincronizar cursos locais no Supabase.", error);
+    return dbCourses;
+  }
 }
 
 async function persistCourse(course) {
@@ -3204,7 +3229,7 @@ async function loadTeacherRowsFromDb(formacaoId) {
   if (!db) return localRows;
   try {
     const rows = await selectAllDbRows("professor_dados", "nome,email,inep,conclusao,media,resultado,curso_id,imported_at", (q) =>
-      q.eq("formacao_id", formacaoId).order("nome")
+      q.eq("formacao_id", formacaoId).not("curso_id", "is", null).order("nome")
     );
     const schoolByInep = new Map();
     (state.base?.schools || []).forEach((s) => schoolByInep.set(String(s.inep), s));
