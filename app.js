@@ -4054,17 +4054,19 @@ function renderTeachersArea() {
       : "Relatório de formações";
   }
   const schoolRows = getTeacherSchoolRows();
+  const selectedGre = isAdmin ? state.teachersGreFilter : state.user?.gre;
   const allPersonRows = (() => {
-    const userGre = state.user?.gre;
     let rows = getFilteredTeacherRowsByReportFilters();
-    if (!isAdmin) rows = rows.filter((r) => r.gre === userGre);
+    if (selectedGre && selectedGre !== "todos") rows = rows.filter((r) => r.gre === selectedGre);
     return rows;
   })();
 
   // Métricas — total esperado: admin = global, regional = só sua GRE
   const schools = state.base?.schools || [];
   const totalEsperado = isAdmin
-    ? schools.reduce((s, sc) => s + (sc.professores || 0), 0)
+    ? schools
+      .filter((sc) => !selectedGre || selectedGre === "todos" || sc.gre === selectedGre)
+      .reduce((s, sc) => s + (sc.professores || 0), 0)
     : schools.filter((sc) => sc.gre === state.user?.gre).reduce((s, sc) => s + (sc.professores || 0), 0);
   const totalInscritos = allPersonRows.length;
   const totalConcluidos = allPersonRows.filter((r) => r.resultado === "Concluído").length;
