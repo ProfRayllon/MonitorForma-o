@@ -41,6 +41,10 @@ const state = {
   dashboardGreFilter: "todos",
   dashboardCourseFilter: "todos",
   dashboardSchoolSearch: "",
+  teacherTablePage: 1,
+  dashboardCoursePage: 1,
+  dashboardSchoolPage: 1,
+  schoolsTablePage: 1,
 };
 
 const SUPABASE_URL = "https://intswvnfmizbttlrqhdt.supabase.co";
@@ -48,6 +52,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_XwPyaNxJ1BFTplBsTRmOLQ_wBOp1OUm";
 const db = window.supabase?.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) || null;
 const SESSION_KEY = "monitor-current-user";
 const DB_PAGE_SIZE = 1000;
+const TABLE_PAGE_SIZE = 10;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
@@ -167,6 +172,45 @@ function withContentLoader(fn) {
   requestAnimationFrame(() => requestAnimationFrame(() => {
     try { fn(); } finally { hideContentLoader(); }
   }));
+}
+
+function paginateItems(items, pageKey, pageSize = TABLE_PAGE_SIZE) {
+  const total = items.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(totalPages, Math.max(1, Number(state[pageKey] || 1)));
+  state[pageKey] = page;
+  const start = (page - 1) * pageSize;
+  return { page, totalPages, start, pageItems: items.slice(start, start + pageSize) };
+}
+
+function renderPagination(selector, pageKey, total, renderFn, pageSize = TABLE_PAGE_SIZE) {
+  const el = $(selector);
+  if (!el) return;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(totalPages, Math.max(1, Number(state[pageKey] || 1)));
+  state[pageKey] = page;
+  if (total <= pageSize) {
+    el.innerHTML = total ? `<span>Mostrando ${total.toLocaleString("pt-BR")} de ${total.toLocaleString("pt-BR")}</span>` : "";
+    return;
+  }
+  const start = (page - 1) * pageSize + 1;
+  const end = Math.min(total, page * pageSize);
+  el.innerHTML = `
+    <span>Mostrando ${start.toLocaleString("pt-BR")}–${end.toLocaleString("pt-BR")} de ${total.toLocaleString("pt-BR")}</span>
+    <div class="pagination-actions">
+      <button class="mini-button" type="button" data-page-prev ${page <= 1 ? "disabled" : ""}>Anterior</button>
+      <strong>${page} / ${totalPages}</strong>
+      <button class="mini-button" type="button" data-page-next ${page >= totalPages ? "disabled" : ""}>Próxima</button>
+    </div>
+  `;
+  el.querySelector("[data-page-prev]")?.addEventListener("click", () => {
+    state[pageKey] = Math.max(1, page - 1);
+    renderFn();
+  });
+  el.querySelector("[data-page-next]")?.addEventListener("click", () => {
+    state[pageKey] = Math.min(totalPages, page + 1);
+    renderFn();
+  });
 }
 
 function showPageLoader() {
@@ -845,14 +889,15 @@ function bindEvents() {
     if (file) importCsvFile(file);
     e.target.value = "";
   });
-  on("#schoolSearch", "input", renderFormationDetail);
-  on("#statusFilter", "change", renderFormationDetail);
+  on("#schoolSearch", "input", () => { state.schoolsTablePage = 1; renderFormationDetail(); });
+  on("#statusFilter", "change", () => { state.schoolsTablePage = 1; renderFormationDetail(); });
   on("#greFilter", "change", () => {
     clearSelection();
+    state.schoolsTablePage = 1;
     renderFormationDetail();
   });
-  on("#recursoFilter", "change", renderFormationDetail);
-  on("#resultadoFilter", "change", renderFormationDetail);
+  on("#recursoFilter", "change", () => { state.schoolsTablePage = 1; renderFormationDetail(); });
+  on("#resultadoFilter", "change", () => { state.schoolsTablePage = 1; renderFormationDetail(); });
   on("#selectAllCheck", "change", (e) => {
     const allRows = filteredRows(getFormationRows());
     allRows.forEach((r) => {
@@ -899,14 +944,15 @@ function bindEvents() {
     render();
   });
 
-  on("#teacherSearch", "input", () => { state.teachersSearch = $("#teacherSearch")?.value || ""; withContentLoader(() => renderTeachersArea()); });
-  on("#teacherGreFilter", "change", () => { state.teachersGreFilter = $("#teacherGreFilter")?.value || "todos"; withContentLoader(() => renderTeachersArea()); });
-  on("#teacherConclusaoFilter", "change", () => { state.teachersConclusaoFilter = $("#teacherConclusaoFilter")?.value || "todos"; withContentLoader(() => renderTeachersArea()); });
+  on("#teacherSearch", "input", () => { state.teachersSearch = $("#teacherSearch")?.value || ""; state.teacherTablePage = 1; withContentLoader(() => renderTeachersArea()); });
+  on("#teacherGreFilter", "change", () => { state.teachersGreFilter = $("#teacherGreFilter")?.value || "todos"; state.teacherTablePage = 1; withContentLoader(() => renderTeachersArea()); });
+  on("#teacherConclusaoFilter", "change", () => { state.teachersConclusaoFilter = $("#teacherConclusaoFilter")?.value || "todos"; state.teacherTablePage = 1; withContentLoader(() => renderTeachersArea()); });
   on("#downloadTeacherSpreadsheet", "click", downloadTeacherSpreadsheet);
   $$("[data-teacher-view]").forEach((b) => {
     b.addEventListener("click", () => {
       state.teachersView = b.dataset.teacherView;
       state.teachersSearch = "";
+      state.teacherTablePage = 1;
       const search = $("#teacherSearch");
       if (search) search.value = "";
       withContentLoader(() => renderTeachersArea());
@@ -920,9 +966,9 @@ function bindEvents() {
   on("#backFromDashboardBtn", "click", showTeachersArea);
   on("#exportDashboardXlsx", "click", exportDashboardXlsx);
   on("#exportDashboardPdf", "click", () => window.print());
-  on("#dashFilterGre", "change", () => { state.dashboardGreFilter = $("#dashFilterGre")?.value || "todos"; renderTeacherDashboard(); });
-  on("#dashFilterCourse", "change", () => { state.dashboardCourseFilter = $("#dashFilterCourse")?.value || "todos"; renderTeacherDashboard(); });
-  on("#dashSchoolSearch", "input", () => { state.dashboardSchoolSearch = $("#dashSchoolSearch")?.value || ""; renderDashboardSchoolTable(); });
+  on("#dashFilterGre", "change", () => { state.dashboardGreFilter = $("#dashFilterGre")?.value || "todos"; state.dashboardCoursePage = 1; state.dashboardSchoolPage = 1; renderTeacherDashboard(); });
+  on("#dashFilterCourse", "change", () => { state.dashboardCourseFilter = $("#dashFilterCourse")?.value || "todos"; state.dashboardCoursePage = 1; state.dashboardSchoolPage = 1; renderTeacherDashboard(); });
+  on("#dashSchoolSearch", "input", () => { state.dashboardSchoolSearch = $("#dashSchoolSearch")?.value || ""; state.dashboardSchoolPage = 1; renderDashboardSchoolTable(); });
   on("#addCourseBtn", "click", () => startNewCourse(state.teacherFormationId));
   on("#coursesGlobalBtn", "click", showAllCoursesArea);
   on("#courseFormEl", "submit", saveCourse);
@@ -2288,10 +2334,11 @@ function renderFormationDetail() {
   const sel = state.selectedSchools;
   const allIneps = rows.map((r) => String(r.inep));
   const allSelected = allIneps.length > 0 && allIneps.every((i) => sel.has(i));
+  const { pageItems: visibleRows } = paginateItems(rows, "schoolsTablePage");
   renderSchoolResultCount(rows.length, allRows.length);
 
   $("#schoolsTable").innerHTML = rows.length
-    ? rows.map((row) => {
+    ? visibleRows.map((row) => {
         const rep = row.representantes[0];
         const inep = String(row.inep);
         const checked = sel.has(inep) ? "checked" : "";
@@ -2338,6 +2385,7 @@ function renderFormationDetail() {
           </tr>`;
       }).join("")
     : `<tr><td colspan="12" style="text-align:center;color:var(--muted);padding:32px">Nenhuma escola encontrada com os filtros aplicados.</td></tr>`;
+  renderPagination("#schoolsTablePagination", "schoolsTablePage", rows.length, renderFormationDetail);
 
   const selectAllEl = $("#selectAllCheck");
   if (selectAllEl) selectAllEl.checked = allSelected;
@@ -2833,6 +2881,7 @@ function renderGreBars(rows) {
       const search = $("#schoolSearch");
       if (search) search.value = "";
       clearSelection();
+      state.schoolsTablePage = 1;
       renderFormationDetail();
       $("#schoolsTable")?.closest(".panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
@@ -3656,8 +3705,9 @@ function renderDashboardCourseTable(filteredCourses, rows) {
   const bodyEl = $("#dashCourseBody");
   if (!headEl || !bodyEl) return;
   const pctColor = (v) => v >= 90 ? "#22c55e" : v >= 50 ? "#38bdf8" : v >= 30 ? "#f59e0b" : "#ef4444";
+  const { pageItems } = paginateItems(filteredCourses, "dashboardCoursePage");
   headEl.innerHTML = `<th>Curso</th><th>Trilha</th><th class="th-num">Inscritos</th><th class="th-num">Concluídos</th><th class="th-num">Em andamento</th><th class="th-num">Não iniciados</th><th class="th-num">%</th>`;
-  bodyEl.innerHTML = filteredCourses.map((c) => {
+  bodyEl.innerHTML = pageItems.map((c) => {
     const cr = rows.filter((r) => r.cursoId === c.id);
     const ins = cr.length;
     const con = cr.filter((r) => r.resultado === "Concluído").length;
@@ -3677,6 +3727,7 @@ function renderDashboardCourseTable(filteredCourses, rows) {
       <td><div class="pct-bar-wrap"><div class="pct-bar-track"><div class="pct-bar-fill" style="width:${Math.min(100,p)}%;background:${color}"></div></div><span class="pct-bar-label" style="color:${color}">${p}%</span></div></td>
     </tr>`;
   }).join("") || `<tr><td colspan="7" class="empty-row">Nenhum dado.</td></tr>`;
+  renderPagination("#dashCoursePagination", "dashboardCoursePage", filteredCourses.length, () => renderDashboardCourseTable(filteredCourses, rows));
 }
 
 function renderDashboardSchoolTable() {
@@ -3696,8 +3747,9 @@ function renderDashboardSchoolTable() {
   });
   let entries = [...byInep.values()].sort((a, b) => getGreNumber(a.gre) - getGreNumber(b.gre) || a.escola.localeCompare(b.escola));
   if (search) entries = entries.filter((e) => normalize(e.escola).includes(search) || normalize(e.gre).includes(search));
+  const { pageItems } = paginateItems(entries, "dashboardSchoolPage");
   headEl.innerHTML = `<th>GRE</th><th>Escola</th><th class="th-num">Inscritos</th><th class="th-num">Concluídos</th><th class="th-num">%</th>`;
-  bodyEl.innerHTML = entries.map((e) => {
+  bodyEl.innerHTML = pageItems.map((e) => {
     const p = e.total > 0 ? Math.round((e.concluidos / e.total) * 100) : 0;
     const color = pctColor(p);
     return `<tr>
@@ -3708,6 +3760,7 @@ function renderDashboardSchoolTable() {
       <td><div class="pct-bar-wrap"><div class="pct-bar-track"><div class="pct-bar-fill" style="width:${Math.min(100,p)}%;background:${color}"></div></div><span class="pct-bar-label" style="color:${color}">${p}%</span></div></td>
     </tr>`;
   }).join("") || `<tr><td colspan="5" class="empty-row">Nenhuma escola encontrada.</td></tr>`;
+  renderPagination("#dashSchoolPagination", "dashboardSchoolPage", entries.length, renderDashboardSchoolTable);
 }
 
 function exportDashboardXlsx() {
@@ -4289,6 +4342,7 @@ async function applyTeacherReportFilter() {
   state.teacherFilterCourseIds = [...(state.teacherDraftCourseIds || [])];
   state.teacherFilterTrilhas = [...(state.teacherDraftTrilhas || [])];
   state.teacherReportFilterOpen = "";
+  state.teacherTablePage = 1;
 
   state.selectedCourseId = state.teacherFilterCourseIds.length === 1 ? state.teacherFilterCourseIds[0] : null;
   const formationIds = getTeacherSelectedFormationIds();
@@ -4358,6 +4412,7 @@ function renderTeacherGreBars(schoolRows, strictAdmin = true) {
         if (!greFilter) return;
         greFilter.value = greFilter.value === bar.dataset.teacherGre ? "todos" : bar.dataset.teacherGre;
         state.teachersGreFilter = greFilter.value;
+        state.teacherTablePage = 1;
         renderTeachersArea();
       });
     });
@@ -4408,6 +4463,7 @@ function renderTeachersTable() {
 
   if (state.teachersView === "school") {
     const rows = filteredTeacherSchoolRows();
+    const { pageItems } = paginateItems(rows, "teacherTablePage");
     if (titleEl) titleEl.textContent = "Por escola";
     if (countEl) countEl.textContent = `${rows.length} escola${rows.length !== 1 ? "s" : ""}`;
 
@@ -4433,7 +4489,7 @@ function renderTeachersTable() {
     </tr>`;
 
     const colspan = strictAdmin ? 7 : 6;
-    bodyEl.innerHTML = rows.map((s) => {
+    bodyEl.innerHTML = pageItems.map((s) => {
       const color = pctColor(s.pct);
       return `<tr>
         <td class="td-gre">${esc(s.gre)}</td>
@@ -4452,9 +4508,11 @@ function renderTeachersTable() {
         </td>
       </tr>`;
     }).join("") || `<tr><td colspan="${colspan}" class="empty-row">Nenhuma escola encontrada.</td></tr>`;
+    renderPagination("#teacherTablePagination", "teacherTablePage", rows.length, renderTeachersTable);
 
   } else {
     const rows = filteredTeacherPersonRows();
+    const { pageItems } = paginateItems(rows, "teacherTablePage");
     if (titleEl) titleEl.textContent = "Por professor";
     if (countEl) countEl.textContent = `${rows.length} professor${rows.length !== 1 ? "es" : ""}`;
 
@@ -4471,7 +4529,7 @@ function renderTeachersTable() {
       <th>GRE</th><th>INEP</th><th>Escola</th><th>Nome</th><th class="th-num">Conclusão</th><th class="th-num">Média</th><th>Resultado</th>
     </tr>`;
 
-    bodyEl.innerHTML = rows.map((r) => {
+    bodyEl.innerHTML = pageItems.map((r) => {
       const color = pctColor(r.conclusao);
       return `<tr>
         <td class="td-gre">${esc(r.gre)}</td>
@@ -4490,6 +4548,7 @@ function renderTeachersTable() {
         <td>${resultadoPill(r.resultado)}</td>
       </tr>`;
     }).join("") || `<tr><td colspan="7" class="empty-row">Nenhum professor encontrado.</td></tr>`;
+    renderPagination("#teacherTablePagination", "teacherTablePage", rows.length, renderTeachersTable);
   }
 }
 

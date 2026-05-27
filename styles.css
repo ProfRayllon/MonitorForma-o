@@ -2387,6 +2387,31 @@ td { font-size: 0.88rem; }
 tbody tr { transition: background var(--transition); }
 tbody tr:hover { background: rgba(124, 58, 237, 0.07); }
 tbody tr:last-child td { border-bottom: 0; }
+.table-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 12px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+.pagination-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pagination-actions strong {
+  min-width: 52px;
+  color: var(--ink);
+  font-size: 0.78rem;
+  text-align: center;
+}
+.pagination-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
 
 /* ─── PILLS / STATUS ────────────────────────────────────────────────────── */
 .pill {
