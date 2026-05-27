@@ -1249,12 +1249,29 @@ function renderHome() {
           const s = summarizeFormation(f);
           const pI = s.total ? Math.round((s.inscritos / s.total) * 100) : 0;
           const pC = s.total ? Math.round((s.credenciados / s.total) * 100) : 0;
+          const totalLabel = s.total
+            ? `${s.total.toLocaleString("pt-BR")} escola${s.total !== 1 ? "s" : ""}`
+            : "Sem base";
           return `
           <div class="home-formation-card" data-home-formation="${esc(f.id)}">
-            <strong>${esc(f.nome)}</strong>
-            <div class="home-fc-row">
-              <span>${esc(f.publico)}</span>
-              <span>${s.total.toLocaleString("pt-BR")} escolas</span>
+            <div class="home-fc-head">
+              <div>
+                <strong>${esc(f.nome)}</strong>
+                <span>${esc(f.publico || "Formação")}</span>
+              </div>
+              <small>${esc(totalLabel)}</small>
+            </div>
+            <div class="home-fc-metrics">
+              <div class="home-fc-metric">
+                <span>Inscrição</span>
+                <strong>${pI}%</strong>
+                <small>${s.inscritos.toLocaleString("pt-BR")} de ${s.total.toLocaleString("pt-BR")}</small>
+              </div>
+              <div class="home-fc-metric credential">
+                <span>Credenciamento</span>
+                <strong>${pC}%</strong>
+                <small>${s.credenciados.toLocaleString("pt-BR")} de ${s.total.toLocaleString("pt-BR")}</small>
+              </div>
             </div>
             <div class="home-fc-bar-wrap">
               <div class="home-fc-bar-label"><span>Inscrição</span><span>${pI}%</span></div>

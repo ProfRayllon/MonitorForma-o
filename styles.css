@@ -966,22 +966,89 @@ option { color: #111; background: #fff; }
 }
 
 .home-formation-card {
-  padding: 20px;
+  padding: 18px;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  background: rgba(20, 18, 42, 0.82);
+  background:
+    linear-gradient(145deg, rgba(168,85,247,0.10), rgba(6,182,212,0.04) 38%, rgba(20,18,42,0.88)),
+    rgba(20, 18, 42, 0.82);
   backdrop-filter: blur(16px);
   display: grid;
-  gap: 12px;
+  gap: 14px;
   transition: border-color var(--transition), transform var(--transition), box-shadow var(--transition);
   cursor: pointer;
 }
 .home-formation-card:hover { border-color: rgba(168, 85, 247, 0.4); transform: translateY(-2px); box-shadow: 0 12px 32px rgba(0,0,0,0.3); }
 .home-formation-card strong { font-size: 1rem; font-weight: 700; }
+.home-fc-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.home-fc-head > div {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.home-fc-head strong {
+  line-height: 1.35;
+}
+.home-fc-head span,
+.home-fc-head small {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 750;
+}
+.home-fc-head small {
+  flex-shrink: 0;
+  padding-top: 3px;
+}
+.home-fc-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.home-fc-metric {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(168,85,247,0.24);
+  border-radius: 8px;
+  background: rgba(168,85,247,0.10);
+}
+.home-fc-metric.credential {
+  border-color: rgba(16,185,129,0.24);
+  background: rgba(16,185,129,0.10);
+}
+.home-fc-metric span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.home-fc-metric strong {
+  color: var(--ink);
+  font-size: 1.55rem;
+  font-weight: 950;
+  line-height: 1;
+}
+.home-fc-metric small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .home-fc-row { display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; color: var(--muted); }
 .home-fc-bar-wrap { display: grid; gap: 6px; }
 .home-fc-bar-label { display: flex; justify-content: space-between; font-size: 0.78rem; color: var(--muted); font-weight: 700; }
-.home-fc-bar { height: 6px; border-radius: 99px; background: rgba(255,255,255,0.08); overflow: hidden; }
+.home-fc-bar { height: 7px; border-radius: 99px; background: rgba(255,255,255,0.08); overflow: hidden; }
 .home-fc-bar span { display: block; height: 100%; border-radius: inherit; }
 
 /* ─── FORMATION SELECTION ───────────────────────────────────────────────── */
