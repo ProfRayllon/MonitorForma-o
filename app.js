@@ -32,6 +32,7 @@ const state = {
   teachersSearch: "",
   teachersConclusaoFilter: "todos",
   teacherAdminFormView: "list",
+  teacherPersistError: "",
   courses: [],
   selectedCourseId: null,
   courseAdminFormView: "list",
@@ -3238,7 +3239,11 @@ async function loadTeacherRowsForFormations(formacaoIds) {
 }
 
 async function persistTeacherRows(formacaoId, rows, cursoId = null) {
-  saveStored("monitor-teacher-rows-" + formacaoId, rows);
+  const localRows = (state.teacherRows?.length ? state.teacherRows : rows)
+    .filter((r) => (r.formacaoId || formacaoId) === formacaoId)
+    .map((r) => ({ ...r, formacaoId: r.formacaoId || formacaoId }));
+  saveStored("monitor-teacher-rows-" + formacaoId, localRows);
+  state.teacherPersistError = "";
   if (!db) return false;
   try {
     notify("Salvando no banco...", `${rows.length.toLocaleString("pt-BR")} professores — pode levar alguns segundos.`, "warning");
@@ -3256,14 +3261,11 @@ async function persistTeacherRows(formacaoId, rows, cursoId = null) {
       media: r.media || 0,
       resultado: r.resultado || "",
     }));
-    const chunkSize = 500;
-    for (let i = 0; i < dbRows.length; i += chunkSize) {
-      const { error } = await db.from("professor_dados").insert(dbRows.slice(i, i + chunkSize));
-      if (error) throw error;
-    }
+    await insertDbRows("professor_dados", dbRows, 500);
     return true;
   } catch (err) {
     console.warn("Não foi possível salvar professores no Supabase.", err);
+    state.teacherPersistError = err?.message || "Erro desconhecido ao salvar no Supabase.";
     return false;
   }
 }
@@ -3342,6 +3344,16 @@ async function importTeacherCsv(file) {
         ...taggedRows,
       ];
       const savedToDb = await persistTeacherRows(state.teacherFormationId, taggedRows, cursoId);
+      if (db && !savedToDb) {
+        hidePageLoader();
+        notify(
+          "Base não salva no banco",
+          state.teacherPersistError || "A importação ficou apenas neste navegador. Tente novamente depois.",
+          "error",
+        );
+        renderTeachersArea();
+        return false;
+      }
       if (cursoId) {
         const course = state.courses.find((c) => c.id === cursoId);
         if (course) {
@@ -3863,18 +3875,29 @@ async function saveCourse(event) {
     state.teacherFormationId = formacaoId;
 
     if (!editingCourse) state.courses.push(course);
+    let courseSavedToDb = !db;
     try {
       await persistCourse(course);
+      courseSavedToDb = true;
       notify("Curso salvo com sucesso", "Confirmado no banco de dados.");
     } catch (error) {
       saveStored("monitor-courses", state.courses);
       notify("Salvo localmente", `Erro: ${error?.message || "Sem conexão"}`, "warning");
     }
     if (dadosFile && dadosFile.size) {
+      if (db && !courseSavedToDb) {
+        notify(
+          "Base não importada",
+          "O curso não foi confirmado no banco. Salve o curso novamente antes de importar a base.",
+          "error",
+        );
+        return;
+      }
       state.teacherRows = await loadTeacherRowsFromDb(formacaoId);
       state.teacherFormationId = formacaoId;
       state.selectedCourseId = course.id;
-      await importTeacherCsv(dadosFile);
+      const imported = await importTeacherCsv(dadosFile);
+      if (!imported) return;
     }
     const returnMode = state.courseFormReturnMode;
     state.editingCourseId = null;
