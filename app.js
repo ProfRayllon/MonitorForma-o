@@ -716,6 +716,40 @@ function fromDbCourse(row) {
   };
 }
 
+async function loadCourseImportStats() {
+  if (!db) return new Map();
+  try {
+    const rows = await selectAllDbRows("professor_dados", "curso_id,imported_at", (q) =>
+      q.not("curso_id", "is", null)
+    );
+    return rows.reduce((stats, row) => {
+      const cursoId = row.curso_id;
+      if (!cursoId) return stats;
+      const current = stats.get(cursoId) || { count: 0, lastImportedAt: "" };
+      current.count += 1;
+      current.lastImportedAt = latestTimestamp([current.lastImportedAt, row.imported_at]);
+      stats.set(cursoId, current);
+      return stats;
+    }, new Map());
+  } catch (error) {
+    console.warn("Não foi possível carregar resumo de importação dos cursos.", error);
+    return new Map();
+  }
+}
+
+function mergeCourseImportStats(courses, stats) {
+  if (!stats?.size) return courses;
+  return courses.map((course) => {
+    const item = stats.get(course.id);
+    if (!item) return course;
+    return {
+      ...course,
+      importedCount: Math.max(Number(course.importedCount || 0), item.count || 0),
+      lastImportedAt: latestTimestamp([course.lastImportedAt, item.lastImportedAt]),
+    };
+  });
+}
+
 function toDbCourse(course) {
   return {
     id: course.id,
@@ -733,7 +767,8 @@ async function loadCourses() {
   try {
     const { data, error } = await db.from("cursos").select("*").order("created_at", { ascending: true });
     if (error) throw error;
-    const courses = (data || []).map(fromDbCourse);
+    const importStats = await loadCourseImportStats();
+    const courses = mergeCourseImportStats((data || []).map(fromDbCourse), importStats);
     saveStored("monitor-courses", courses);
     return courses;
   } catch { return local; }
@@ -3167,7 +3202,7 @@ async function loadTeacherRowsFromDb(formacaoId) {
   const localRows = loadStored(localKey, []).map((r) => ({ ...r, formacaoId: r.formacaoId || formacaoId }));
   if (!db) return localRows;
   try {
-    const rows = await selectAllDbRows("professor_dados", "nome,email,inep,conclusao,media,resultado,curso_id", (q) =>
+    const rows = await selectAllDbRows("professor_dados", "nome,email,inep,conclusao,media,resultado,curso_id,imported_at", (q) =>
       q.eq("formacao_id", formacaoId).order("nome")
     );
     const schoolByInep = new Map();
@@ -3184,6 +3219,7 @@ async function loadTeacherRowsFromDb(formacaoId) {
         media: Number(r.media || 0),
         resultado: r.resultado || "",
         cursoId: r.curso_id || null,
+        importedAt: r.imported_at || "",
         formacaoId,
       };
     });
