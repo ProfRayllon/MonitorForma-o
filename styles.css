@@ -1131,7 +1131,7 @@ option { color: #111; background: #fff; }
   margin-bottom: 14px;
 }
 #teacherFormationCards {
-  grid-template-columns: repeat(auto-fit, minmax(320px, 420px));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
 }
 
 .event-card {
@@ -1236,6 +1236,196 @@ option { color: #111; background: #fff; }
   gap: 8px;
   justify-content: flex-end;
   margin-left: auto;
+}
+
+
+.teacher-report-courses {
+  position: relative;
+  z-index: 30;
+  margin: -2px 0 14px;
+}
+.report-filter-panel {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  overflow: visible;
+}
+.report-filter-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.report-filter-toolbar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(210px, 1fr)) auto;
+  align-items: stretch;
+  gap: 10px;
+}
+.report-filter-menu {
+  position: relative;
+  min-width: 0;
+}
+.report-filter-field {
+  display: block;
+  min-width: 0;
+}
+.report-filter-field > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.report-filter-field select {
+  width: 100%;
+  height: 42px;
+  min-width: 0;
+}
+.report-filter-trigger,
+.report-filter-apply {
+  min-height: 42px;
+  border: 1px solid rgba(168,85,247,0.35);
+  border-radius: 10px;
+  background: rgba(168,85,247,0.08);
+  color: var(--ink);
+}
+.report-filter-trigger {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "label icon"
+    "value icon";
+  align-items: center;
+  gap: 1px 10px;
+  width: 100%;
+  padding: 8px 11px;
+  text-align: left;
+}
+.report-filter-trigger span {
+  grid-area: label;
+  color: var(--muted);
+  font-size: 0.64rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.report-filter-trigger strong {
+  grid-area: value;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.report-filter-trigger svg {
+  grid-area: icon;
+  color: var(--primary-2);
+  transition: transform var(--transition);
+}
+.report-filter-menu.open .report-filter-trigger {
+  border-color: rgba(6,182,212,0.55);
+  background: rgba(6,182,212,0.1);
+}
+.report-filter-menu.open .report-filter-trigger svg {
+  transform: rotate(180deg);
+}
+.report-filter-popover {
+  display: none;
+  position: absolute;
+  z-index: 200;
+  top: calc(100% + 8px);
+  left: 0;
+  width: min(360px, 80vw);
+  max-height: 280px;
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid rgba(168,85,247,0.28);
+  border-radius: 10px;
+  background: #ffffff;
+  color: #120f24;
+  box-shadow: 0 18px 42px rgba(0,0,0,0.42);
+}
+.report-filter-menu.open .report-filter-popover { display: block; }
+.report-filter-options {
+  display: grid;
+  gap: 2px;
+}
+.report-filter-option {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 6px 8px;
+  border-radius: 7px;
+  color: #111827;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.report-filter-option:hover {
+  background: #eeeeee;
+}
+.report-filter-option:has(input:checked) {
+  background: #777777;
+  color: #ffffff;
+}
+.report-filter-option input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--primary-2);
+  cursor: pointer;
+}
+.report-filter-option span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.report-filter-option small {
+  color: inherit;
+  opacity: 0.75;
+}
+.report-filter-apply {
+  padding: 0 16px;
+  color: #04111a;
+  background: var(--accent);
+  border-color: rgba(6,182,212,0.65);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+@media (max-width: 900px) {
+  #teacherFormationCards { grid-template-columns: 1fr; }
+  .report-filter-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .report-filter-toolbar {
+    grid-template-columns: 1fr;
+  }
+  .report-filter-menu {
+    width: 100%;
+  }
+  .report-filter-popover {
+    position: static;
+    width: 100%;
+    margin-top: 8px;
+  }
+  .report-filter-apply {
+    width: 100%;
+  }
+}
+
+@media (min-width: 901px) and (max-width: 1180px) {
+  .report-filter-toolbar {
+    grid-template-columns: repeat(3, minmax(170px, 1fr)) auto;
+  }
+  .report-filter-trigger strong {
+    font-size: 0.72rem;
+  }
 }
 
 /* ─── RECURSOS ───────────────────────────────────────────────────────────── */
@@ -1455,7 +1645,7 @@ option { color: #111; background: #fff; }
 
 @media print {
   .sidebar, .topbar, #backFromDashboardBtn, .dash-filter-row, #exportDashboardXlsx, #exportDashboardPdf,
-  #teachersListArea, #coursesArea, #teacherInsertArea, #teachersArea, #directorsArea,
+  #teachersListArea, #coursesArea, #teachersArea, #directorsArea,
   #formationHome, #formationDetail, #formationForm, .tab-panel:not(#formationTab) { display: none !important; }
   #teacherDashboardArea { display: block !important; }
   .app-shell { grid-template-columns: 1fr !important; grid-template-rows: auto !important; }

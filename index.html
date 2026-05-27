@@ -241,7 +241,11 @@
                     </button>
                     <button class="secondary" type="button" id="addTeacherFormationBtn">
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
-                      Cadastrar
+                      Cadastrar formação
+                    </button>
+                    <button class="secondary" type="button" id="coursesGlobalBtn">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                      Cursos
                     </button>
                   </div>
                 </div>
@@ -285,6 +289,56 @@
                   <button type="submit" id="teacherFormSubmitBtn">Salvar formação</button>
                 </div>
               </form>
+
+              <form class="panel formation-form hidden admin-only" id="courseFormEl">
+                <div class="panel-head">
+                  <div>
+                    <p class="eyebrow">Administrativo</p>
+                    <h3 id="courseFormTitle">Cadastrar curso</h3>
+                  </div>
+                </div>
+                <label>
+                  Formação vinculada
+                  <select name="formacaoId" id="courseFormationSelect" required>
+                    <option value="">Selecione a formação</option>
+                  </select>
+                </label>
+                <div class="form-row">
+                  <label>
+                    Nome do curso
+                    <input name="nome" placeholder="Ex: Google for Education" required />
+                  </label>
+                  <label>
+                    Carga horária
+                    <input name="cargaHoraria" placeholder="Ex: 20h" />
+                  </label>
+                </div>
+                <label>
+                  Trilha
+                  <select name="trilha">
+                    <option value="">Selecione a trilha</option>
+                    <option value="Trilha Institucional">Trilha Institucional</option>
+                    <option value="Educação Socioemocional">Educação Socioemocional</option>
+                    <option value="Educação, Ciência e Tecnologia">Educação, Ciência e Tecnologia</option>
+                    <option value="Gestão Pedagógica">Gestão Pedagógica</option>
+                    <option value="Educação Inclusiva">Educação Inclusiva</option>
+                    <option value="BNCC">BNCC</option>
+                  </select>
+                </label>
+                <label>
+                  Foto do curso
+                  <input name="foto" type="file" accept="image/*" />
+                </label>
+                <label>
+                  Base de dados do curso
+                  <input name="dados" type="file" accept=".xlsx,.xls,.csv,.tsv,.txt" />
+                </label>
+                <p class="hint" id="courseFormPhotoHint"></p>
+                <div class="form-actions">
+                  <button class="secondary" id="cancelCourseFormBtn" type="button">Cancelar</button>
+                  <button type="submit" id="courseFormSubmitBtn">Salvar curso</button>
+                </div>
+              </form>
             </section>
 
             <!-- CURSOS DE UMA FORMAÇÃO DE PROFESSORES -->
@@ -300,17 +354,16 @@
                 </div>
                 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
                   <button class="secondary" id="dashboardBtn" type="button">Dashboard</button>
-                  <button class="secondary admin-only" id="insertDataBtn" type="button">Inserir dados</button>
                   <button class="secondary admin-only" id="addCourseBtn" type="button">Cadastrar curso</button>
                 </div>
               </div>
               <div class="formation-grid" id="courseCards"></div>
 
-              <form class="panel formation-form hidden admin-only" id="courseFormEl">
+              <form class="panel formation-form hidden admin-only" id="courseFormElLegacy" aria-hidden="true">
                 <div class="panel-head">
                   <div>
                     <p class="eyebrow">Administrativo</p>
-                    <h3 id="courseFormTitle">Cadastrar curso</h3>
+                    <h3>Cadastrar curso</h3>
                   </div>
                 </div>
                 <div class="form-row">
@@ -339,27 +392,12 @@
                   Foto do curso
                   <input name="foto" type="file" accept="image/*" />
                 </label>
-                <p class="hint" id="courseFormPhotoHint"></p>
+                <p class="hint"></p>
                 <div class="form-actions">
-                  <button class="secondary" id="cancelCourseFormBtn" type="button">Cancelar</button>
-                  <button type="submit" id="courseFormSubmitBtn">Salvar curso</button>
+                  <button class="secondary" type="button">Cancelar</button>
+                  <button type="submit">Salvar curso</button>
                 </div>
               </form>
-            </section>
-
-            <!-- INSERIR DADOS -->
-            <section class="hidden" id="teacherInsertArea">
-              <button class="back-button" id="backFromInsertBtn" type="button" style="margin-bottom:12px">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-                Voltar
-              </button>
-              <div class="section-title row-title" style="margin-bottom:16px">
-                <div>
-                  <p class="eyebrow">Professores</p>
-                  <h3 id="insertAreaTitle">Inserir dados</h3>
-                </div>
-              </div>
-              <div class="formation-grid" id="insertCourseCards"></div>
             </section>
 
             <!-- DASHBOARD GERAL -->
@@ -398,7 +436,7 @@
                 <div class="panel-head compact-head">
                   <div>
                     <p class="eyebrow">Conclusão por GRE</p>
-                    <h3 class="panel-title">Professores concluídos por GRE</h3>
+                    <h3 class="panel-title">Professores concluintes por GRE</h3>
                   </div>
                 </div>
                 <div class="goal-bars-wrap">
@@ -450,23 +488,16 @@
                   <p class="eyebrow" style="margin-top:8px">Professores</p>
                   <h3 id="teacherFormationName">Formação de Professores 2026</h3>
                 </div>
-                <div style="display:flex;align-items:center;gap:10px">
-                  <span class="import-timestamp hidden" id="teacherImportTimestamp"></span>
-                  <button class="secondary admin-only" id="importTeacherBtn" type="button">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-                    Importar planilha
-                  </button>
-                  <input type="file" id="importTeacherInput" accept=".xlsx,.xls,.csv,.tsv,.txt" style="display:none" />
-                </div>
               </div>
 
+              <div class="teacher-report-courses" id="teacherReportCourses"></div>
               <div class="metrics-grid" id="teacherMetrics"></div>
 
               <article class="panel goal-panel admin-only" id="teacherGoalPanel">
                 <div class="panel-head compact-head">
                   <div>
                     <p class="eyebrow">Conclusão por GRE</p>
-                    <h3 id="teacherGoalTitle">Professores concluídos por GRE</h3>
+                    <h3 id="teacherGoalTitle">Professores concluintes por GRE</h3>
                   </div>
                 </div>
                 <div class="goal-grid">

@@ -20,6 +20,13 @@ const state = {
   recursos: [],
   teacherRows: [],
   teacherFormationId: null,
+  teacherFilterFormationIds: [],
+  teacherFilterCourseIds: [],
+  teacherFilterTrilhas: [],
+  teacherDraftFormationIds: [],
+  teacherDraftCourseIds: [],
+  teacherDraftTrilhas: [],
+  teacherReportFilterOpen: "",
   teachersView: "school",
   teachersGreFilter: "todos",
   teachersSearch: "",
@@ -29,6 +36,7 @@ const state = {
   selectedCourseId: null,
   courseAdminFormView: "list",
   editingCourseId: null,
+  courseFormReturnMode: "teachers-list",
   dashboardGreFilter: "todos",
   dashboardCourseFilter: "todos",
   dashboardSchoolSearch: "",
@@ -694,6 +702,7 @@ async function deleteFormationFromDb(id) {
 }
 
 function fromDbCourse(row) {
+  const localCourse = loadStored("monitor-courses", []).find((c) => c.id === row.id) || {};
   return {
     id: row.id,
     formacaoId: row.formacao_id,
@@ -701,6 +710,8 @@ function fromDbCourse(row) {
     cargaHoraria: row.carga_horaria || "",
     trilha: row.trilha || "",
     foto: row.foto_url || "",
+    importedCount: localCourse.importedCount || 0,
+    lastImportedAt: localCourse.lastImportedAt || "",
     createdAt: row.created_at,
   };
 }
@@ -827,12 +838,6 @@ function bindEvents() {
     render();
   });
 
-  on("#importTeacherBtn", "click", () => $("#importTeacherInput")?.click());
-  on("#importTeacherInput", "change", (e) => {
-    const file = e.target.files?.[0];
-    if (file) importTeacherCsv(file);
-    e.target.value = "";
-  });
   on("#teacherSearch", "input", () => { state.teachersSearch = $("#teacherSearch")?.value || ""; withContentLoader(() => renderTeachersArea()); });
   on("#teacherGreFilter", "change", () => { state.teachersGreFilter = $("#teacherGreFilter")?.value || "todos"; withContentLoader(() => renderTeachersArea()); });
   on("#teacherConclusaoFilter", "change", () => { state.teachersConclusaoFilter = $("#teacherConclusaoFilter")?.value || "todos"; withContentLoader(() => renderTeachersArea()); });
@@ -850,20 +855,26 @@ function bindEvents() {
   $$("[data-back-home]").forEach((b) => b.addEventListener("click", showFormationHome));
   on("#teachersBackBtn", "click", backFromTeachers);
   on("#backToTeachersListBtn", "click", showTeachersArea);
-  on("#insertDataBtn", "click", openTeacherInsert);
   on("#dashboardBtn", "click", openTeacherDashboard);
-  on("#backFromInsertBtn", "click", backToCourses);
-  on("#backFromDashboardBtn", "click", backToCourses);
+  on("#backFromDashboardBtn", "click", showTeachersArea);
   on("#exportDashboardXlsx", "click", exportDashboardXlsx);
   on("#exportDashboardPdf", "click", () => window.print());
   on("#dashFilterGre", "change", () => { state.dashboardGreFilter = $("#dashFilterGre")?.value || "todos"; renderTeacherDashboard(); });
   on("#dashFilterCourse", "change", () => { state.dashboardCourseFilter = $("#dashFilterCourse")?.value || "todos"; renderTeacherDashboard(); });
   on("#dashSchoolSearch", "input", () => { state.dashboardSchoolSearch = $("#dashSchoolSearch")?.value || ""; renderDashboardSchoolTable(); });
-  on("#addCourseBtn", "click", startNewCourse);
+  on("#addCourseBtn", "click", () => startNewCourse(state.teacherFormationId));
+  on("#coursesGlobalBtn", "click", showAllCoursesArea);
   on("#courseFormEl", "submit", saveCourse);
   on("#cancelCourseFormBtn", "click", () => {
+    const returnMode = state.courseFormReturnMode;
     state.editingCourseId = null;
     state.courseAdminFormView = "list";
+    if (returnMode === "courses-all") {
+      state.formationMode = "courses";
+      state.teacherFormationId = null;
+    } else if (returnMode === "courses-formation") {
+      state.formationMode = "courses";
+    }
     resetCourseForm();
     render();
     renderCoursesList();
@@ -985,7 +996,6 @@ function render() {
   renderFormationCards();
   renderTeacherListCards();
   renderCoursesList();
-  renderTeacherInsert();
   renderTeacherDashboard();
   renderFormationDetail();
   renderTeachersArea();
@@ -1406,35 +1416,61 @@ function showTeachersArea() {
   state.formationMode = "teachers-list";
   state.selectedFormationId = null;
   state.teacherAdminFormView = "list";
+  state.courseAdminFormView = "list";
   state.selectedCourseId = null;
   render();
   renderTeacherListCards();
 }
 
-function openCoursesArea(formacaoId) {
+function showAllCoursesArea() {
   state.formationMode = "courses";
-  state.teacherFormationId = formacaoId;
+  state.teacherFormationId = null;
   state.selectedCourseId = null;
   state.courseAdminFormView = "list";
   render();
   renderCoursesList();
 }
 
-function openCourseMetrics(courseId) {
+async function openCoursesArea(formacaoId) {
+  await openTeacherFormationReport(formacaoId);
+}
+
+async function openTeacherFormationReport(formacaoId, courseId = null) {
+  if (!formacaoId) return;
+  const shouldLoad = state.teacherFormationId !== formacaoId || !state.teacherRows.length;
+  state.teacherFormationId = formacaoId;
+  state.teacherFilterFormationIds = [formacaoId];
+  state.teacherFilterCourseIds = courseId ? [courseId] : [];
+  state.teacherFilterTrilhas = [];
+  state.teacherDraftFormationIds = [...state.teacherFilterFormationIds];
+  state.teacherDraftCourseIds = [...state.teacherFilterCourseIds];
+  state.teacherDraftTrilhas = [];
+  state.teacherReportFilterOpen = "";
   state.selectedCourseId = courseId;
+  state.teachersView = "school";
+  state.teachersGreFilter = "todos";
+  state.teachersConclusaoFilter = "todos";
+  state.teachersSearch = "";
   state.formationMode = "teachers";
+  if (shouldLoad) {
+    showContentLoader();
+    try {
+      state.teacherRows = await loadTeacherRowsForFormations(state.teacherFilterFormationIds);
+    } finally {
+      hideContentLoader();
+    }
+  }
   render();
 }
 
+async function openCourseMetrics(courseId) {
+  const course = state.courses.find((c) => c.id === courseId);
+  if (!course) return;
+  await openTeacherFormationReport(course.formacaoId, course.id);
+}
+
 function backFromTeachers() {
-  if (state.selectedCourseId !== null) {
-    state.formationMode = "courses";
-    state.selectedCourseId = null;
-    render();
-    renderCoursesList();
-  } else {
-    showTeachersArea();
-  }
+  showTeachersArea();
 }
 
 function closeFormationDetail() {
@@ -1461,11 +1497,10 @@ function renderFormationMode() {
   const isAdmin = hasAdminAccess();
   const showForm = isAdmin && state.adminFormationView === "form" && !state.selectedFormationId;
   const showTeacherForm = isAdmin && state.teacherAdminFormView === "form" && state.formationMode === "teachers-list";
-  const showCourseForm = isAdmin && state.courseAdminFormView === "form" && state.formationMode === "courses";
+  const showCourseForm = isAdmin && state.courseAdminFormView === "form" && state.formationMode === "teachers-list";
   $("#formationHome").classList.toggle("hidden", state.formationMode !== "home");
   $("#teachersListArea").classList.toggle("hidden", state.formationMode !== "teachers-list");
   $("#coursesArea").classList.toggle("hidden", state.formationMode !== "courses");
-  $("#teacherInsertArea").classList.toggle("hidden", state.formationMode !== "teacher-insert");
   $("#teacherDashboardArea").classList.toggle("hidden", state.formationMode !== "teacher-dashboard");
   $("#teachersArea").classList.toggle("hidden", state.formationMode !== "teachers");
   $("#directorsArea").classList.toggle("hidden", state.formationMode !== "directors");
@@ -1478,10 +1513,11 @@ function renderFormationMode() {
   });
   // Teacher form / list toggle within #teachersListArea
   $("#teacherFormForm")?.classList.toggle("hidden", !showTeacherForm);
-  $("#teacherFormationCards")?.classList.toggle("hidden", showTeacherForm);
-  $("#teachersListHeader")?.classList.toggle("hidden", showTeacherForm);
+  $("#teacherFormationCards")?.classList.toggle("hidden", showTeacherForm || showCourseForm);
+  $("#teachersListHeader")?.classList.toggle("hidden", showTeacherForm || showCourseForm);
   // Course form / list toggle within #coursesArea
   $("#courseFormEl")?.classList.toggle("hidden", !showCourseForm);
+  $("#courseFormElLegacy")?.classList.add("hidden");
   $("#courseCards")?.classList.toggle("hidden", showCourseForm);
   $("#coursesListHeader")?.classList.toggle("hidden", showCourseForm);
 }
@@ -3128,7 +3164,7 @@ async function ensureTeacherFormation() {
 
 async function loadTeacherRowsFromDb(formacaoId) {
   const localKey = "monitor-teacher-rows-" + formacaoId;
-  const localRows = loadStored(localKey, []);
+  const localRows = loadStored(localKey, []).map((r) => ({ ...r, formacaoId: r.formacaoId || formacaoId }));
   if (!db) return localRows;
   try {
     const rows = await selectAllDbRows("professor_dados", "nome,email,inep,conclusao,media,resultado,curso_id", (q) =>
@@ -3148,6 +3184,7 @@ async function loadTeacherRowsFromDb(formacaoId) {
         media: Number(r.media || 0),
         resultado: r.resultado || "",
         cursoId: r.curso_id || null,
+        formacaoId,
       };
     });
     saveStored(localKey, mapped);
@@ -3155,6 +3192,13 @@ async function loadTeacherRowsFromDb(formacaoId) {
   } catch {
     return localRows;
   }
+}
+
+async function loadTeacherRowsForFormations(formacaoIds) {
+  const ids = [...new Set((formacaoIds || []).filter(Boolean))];
+  if (!ids.length) return [];
+  const groups = await Promise.all(ids.map((id) => loadTeacherRowsFromDb(id)));
+  return groups.flat();
 }
 
 async function persistTeacherRows(formacaoId, rows, cursoId = null) {
@@ -3235,10 +3279,10 @@ function parseTeacherRows(rows2D) {
 }
 
 async function importTeacherCsv(file) {
-  await withButtonBusy($("#importTeacherBtn"), "Importando...", async () => {
+  return withButtonBusy(null, "Importando...", async () => {
     if (!state.teacherFormationId) {
       notify("Erro", "Formação de professores não encontrada.", "error");
-      return;
+      return false;
     }
     showPageLoader();
     try {
@@ -3262,12 +3306,15 @@ async function importTeacherCsv(file) {
         ...taggedRows,
       ];
       const savedToDb = await persistTeacherRows(state.teacherFormationId, taggedRows, cursoId);
-
-      const ts = $("#teacherImportTimestamp");
-      if (ts) {
-        ts.textContent = "Atualizado em " + formatDateTime(new Date().toISOString());
-        ts.classList.remove("hidden");
+      if (cursoId) {
+        const course = state.courses.find((c) => c.id === cursoId);
+        if (course) {
+          course.importedCount = rows.length;
+          course.lastImportedAt = new Date().toISOString();
+          saveStored("monitor-courses", state.courses);
+        }
       }
+
       hidePageLoader();
       notify(
         savedToDb ? "Importação concluída" : "Importação salva localmente",
@@ -3275,9 +3322,11 @@ async function importTeacherCsv(file) {
         savedToDb ? "success" : "warning",
       );
       renderTeachersArea();
+      return true;
     } catch (err) {
       hidePageLoader();
       notify("Erro na importação", err.message || "Verifique o formato do arquivo.", "error");
+      return false;
     }
   });
 }
@@ -3289,9 +3338,8 @@ function getTeacherSchoolRows() {
   (state.base?.schools || []).forEach((s) => schoolByInep.set(String(s.inep), s));
 
   const byInep = new Map();
-  state.teacherRows.forEach((r) => {
+  getFilteredTeacherRowsByReportFilters().forEach((r) => {
     if (!isAdmin && userGre && r.gre !== userGre) return;
-    if (state.selectedCourseId && r.cursoId !== state.selectedCourseId) return;
     if (!byInep.has(r.inep)) {
       const school = schoolByInep.get(r.inep);
       byInep.set(r.inep, {
@@ -3329,7 +3377,7 @@ function filteredTeacherPersonRows() {
   const greF = state.teachersGreFilter;
   const concF = state.teachersConclusaoFilter;
 
-  return state.teacherRows.filter((r) => {
+  return getFilteredTeacherRowsByReportFilters().filter((r) => {
     if (!isAdmin && userGre && r.gre !== userGre) return false;
     if (greF !== "todos" && r.gre !== greF) return false;
     if (concF !== "todos" && r.resultado !== concF) return false;
@@ -3359,16 +3407,36 @@ function filteredTeacherSchoolRows() {
   });
 }
 
-function backToCourses() {
-  state.formationMode = "courses";
-  state.selectedCourseId = null;
-  render();
-  renderCoursesList();
+function getTeacherSelectedFormationIds() {
+  const teacherFormations = state.formations.filter((f) => f.id && normalize(f.publico || "").includes("professor"));
+  const selected = state.teacherFilterFormationIds?.length ? state.teacherFilterFormationIds : teacherFormations.map((f) => f.id);
+  return selected.filter((id) => teacherFormations.some((f) => f.id === id));
 }
 
-function openTeacherInsert() {
-  state.formationMode = "teacher-insert";
-  render();
+function getTeacherDraftFormationIds() {
+  const teacherFormations = state.formations.filter((f) => f.id && normalize(f.publico || "").includes("professor"));
+  const selected = state.teacherDraftFormationIds?.length ? state.teacherDraftFormationIds : teacherFormations.map((f) => f.id);
+  return selected.filter((id) => teacherFormations.some((f) => f.id === id));
+}
+
+function getFilteredTeacherRowsByReportFilters() {
+  const formationIds = new Set(getTeacherSelectedFormationIds());
+  const courseIds = new Set(state.teacherFilterCourseIds || []);
+  const trilhas = new Set(state.teacherFilterTrilhas || []);
+  const coursesById = new Map(state.courses.map((c) => [c.id, c]));
+
+  return state.teacherRows.filter((row) => {
+    const rowFormationId = row.formacaoId || state.teacherFormationId;
+    if (formationIds.size && !formationIds.has(rowFormationId)) return false;
+    const course = coursesById.get(row.cursoId);
+    if (courseIds.size && !courseIds.has(row.cursoId)) return false;
+    if (trilhas.size && !trilhas.has(course?.trilha || "")) return false;
+    return true;
+  });
+}
+
+function backToCourses() {
+  showTeachersArea();
 }
 
 function openTeacherDashboard() {
@@ -3378,48 +3446,6 @@ function openTeacherDashboard() {
   state.dashboardSchoolSearch = "";
   render();
 }
-
-function renderTeacherInsert() {
-  const container = $("#insertCourseCards");
-  if (!container || state.formationMode !== "teacher-insert") return;
-  const formacaoId = state.teacherFormationId;
-  const formation = state.formations.find((f) => f.id === formacaoId);
-  const titleEl = $("#insertAreaTitle");
-  if (titleEl) titleEl.textContent = formation?.nome || "Inserir dados";
-  const courses = state.courses.filter((c) => c.formacaoId === formacaoId);
-  const iconClock = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
-  container.innerHTML = courses.map((c) => {
-    const rows = state.teacherRows.filter((r) => r.cursoId === c.id);
-    const inscritos = rows.length;
-    const concluidos = rows.filter((r) => r.resultado === "Concluído").length;
-    const trilhaStyle = c.trilha ? TRILHA_COLORS[c.trilha] : null;
-    const trilhaTag = trilhaStyle ? `<span class="formation-tag" style="background:${trilhaStyle.bg};border-color:${trilhaStyle.border};color:${trilhaStyle.color}">${esc(c.trilha)}</span>` : "";
-    const cargaTag = c.cargaHoraria ? `<span class="formation-tag">${iconClock}${esc(c.cargaHoraria)}</span>` : "";
-    const allTags = [cargaTag, trilhaTag].filter(Boolean).join("");
-    return `
-      <article class="event-card">
-        ${c.foto ? `<img class="event-photo" src="${esc(c.foto)}" alt="" />` : ""}
-        <div class="event-card-top"><span class="event-type">Curso</span></div>
-        <strong>${esc(c.nome)}</strong>
-        ${allTags ? `<div class="formation-tags">${allTags}</div>` : ""}
-        <small>${inscritos.toLocaleString("pt-BR")} inscritos · ${concluidos.toLocaleString("pt-BR")} concluídos</small>
-        <div class="card-actions">
-          <button class="mini-button" data-import-course="${esc(c.id)}">Importar dados</button>
-        </div>
-      </article>`;
-  }).join("") || `<p class="muted" style="padding:24px">Nenhum curso cadastrado.</p>`;
-  container.querySelectorAll("[data-import-course]").forEach((b) => {
-    b.addEventListener("click", () => {
-      state.selectedCourseId = b.dataset.importCourse;
-      state.formationMode = "teachers";
-      render();
-      renderTeachersArea();
-      setTimeout(() => $("#importTeacherInput")?.click(), 120);
-    });
-  });
-}
-
-// ─── DASHBOARD ───────────────────────────────────────────────────────────────
 
 function getDashboardRows() {
   const isAdmin = hasAdminAccess();
@@ -3484,9 +3510,9 @@ function renderTeacherDashboard() {
   if (metricsEl) {
     const kpis = [
       { label: "Inscritos", value: total.toLocaleString("pt-BR"), v: "metric-accent" },
-      { label: "Concluídos", value: concluidos.toLocaleString("pt-BR"), v: "metric-ok" },
-      { label: "Em andamento", value: emAndamento.toLocaleString("pt-BR"), v: "metric-wait" },
       { label: "Não iniciados", value: naoIniciados.toLocaleString("pt-BR"), sub: `${pctNao}%`, v: "metric-danger" },
+      { label: "Em andamento", value: emAndamento.toLocaleString("pt-BR"), v: "metric-wait" },
+      { label: "Concluídos", value: concluidos.toLocaleString("pt-BR"), v: "metric-ok" },
       { label: "Taxa de conclusão", value: `${pct}%`, v: "metric-ok" },
     ];
     metricsEl.innerHTML = kpis.map((k) => `
@@ -3655,9 +3681,19 @@ function renderCoursesList() {
   const formacaoId = state.teacherFormationId;
   const formation = state.formations.find((f) => f.id === formacaoId);
   const nameEl = $("#coursesFormationName");
-  if (nameEl) nameEl.textContent = formation?.nome || "Cursos";
+  const isAllCourses = !formacaoId;
+  if (nameEl) nameEl.textContent = isAllCourses ? "Cursos cadastrados" : (formation?.nome || "Cursos");
 
-  const courses = state.courses.filter((c) => c.formacaoId === formacaoId);
+  const dashboardBtn = $("#dashboardBtn");
+  if (dashboardBtn) dashboardBtn.classList.toggle("hidden", isAllCourses);
+
+  const courses = (isAllCourses ? state.courses : state.courses.filter((c) => c.formacaoId === formacaoId))
+    .slice()
+    .sort((a, b) => {
+      const fa = state.formations.find((f) => f.id === a.formacaoId)?.nome || "";
+      const fb = state.formations.find((f) => f.id === b.formacaoId)?.nome || "";
+      return fa.localeCompare(fb) || String(a.nome || "").localeCompare(String(b.nome || ""));
+    });
   const iconClock = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
 
   container.innerHTML = courses.map((c) => {
@@ -3665,12 +3701,18 @@ function renderCoursesList() {
     const naplanilha = rows.length;
     const concluidos = rows.filter((r) => r.resultado === "Concluído").length;
     const pct = naplanilha > 0 ? Math.round((concluidos / naplanilha) * 100) : 0;
+    const importedCount = Math.max(Number(c.importedCount || 0), naplanilha);
+    const importInfo = importedCount
+      ? `<small>Base inserida: ${importedCount.toLocaleString("pt-BR")} registros</small>${c.lastImportedAt ? `<small class="event-updated">Atualizado em ${esc(formatDateTime(c.lastImportedAt))}</small>` : ""}`
+      : `<small>Sem dados importados</small>`;
+    const courseFormation = state.formations.find((f) => f.id === c.formacaoId);
     const cargaTag = c.cargaHoraria ? `<span class="formation-tag">${iconClock}${esc(c.cargaHoraria)}</span>` : "";
     const trilhaStyle = c.trilha ? TRILHA_COLORS[c.trilha] : null;
     const trilhaTag = trilhaStyle
       ? `<span class="formation-tag" style="background:${trilhaStyle.bg};border-color:${trilhaStyle.border};color:${trilhaStyle.color}">${esc(c.trilha)}</span>`
       : "";
-    const allTags = [cargaTag, trilhaTag].filter(Boolean).join("");
+    const formationTag = isAllCourses && courseFormation ? `<span class="formation-tag">${esc(courseFormation.nome)}</span>` : "";
+    const allTags = [formationTag, cargaTag, trilhaTag].filter(Boolean).join("");
     return `
       <article class="event-card">
         ${c.foto ? `<img class="event-photo" src="${esc(c.foto)}" alt="" />` : ""}
@@ -3679,21 +3721,17 @@ function renderCoursesList() {
         </div>
         <strong>${esc(c.nome)}</strong>
         ${allTags ? `<div class="formation-tags">${allTags}</div>` : ""}
-        <small>${naplanilha.toLocaleString("pt-BR")} na planilha · ${concluidos.toLocaleString("pt-BR")} concluídos</small>
+        ${importInfo}
+        <small>${concluidos.toLocaleString("pt-BR")} concluídos</small>
         <div class="event-progress"><span style="width:${Math.min(100, pct)}%"></span></div>
         <div class="event-foot"><span>${pct}% conclusão</span></div>
         <div class="card-actions">
           ${isAdmin ? `<button class="mini-button" data-edit-course="${esc(c.id)}">Editar</button>` : ""}
           ${isAdmin ? `<button class="mini-button danger-button" data-delete-course="${esc(c.id)}">Excluir</button>` : ""}
-          <button class="mini-button" data-open-course="${esc(c.id)}">Abrir</button>
         </div>
       </article>
     `;
-  }).join("") || `<p class="muted" style="padding:24px">Nenhum curso cadastrado para esta formação.</p>`;
-
-  container.querySelectorAll("[data-open-course]").forEach((b) => {
-    b.addEventListener("click", () => openCourseMetrics(b.dataset.openCourse));
-  });
+  }).join("") || `<p class="muted" style="padding:24px">${isAllCourses ? "Nenhum curso cadastrado." : "Nenhum curso cadastrado para esta formação."}</p>`;
   container.querySelectorAll("[data-edit-course]").forEach((b) => {
     b.addEventListener("click", () => startEditCourse(b.dataset.editCourse));
   });
@@ -3706,6 +3744,7 @@ function resetCourseForm() {
   const form = $("#courseFormEl");
   if (!form) return;
   form.reset();
+  populateCourseFormationSelect(state.teacherFormationId);
   const title = $("#courseFormTitle");
   if (title) title.textContent = "Cadastrar curso";
   const btn = $("#courseFormSubmitBtn");
@@ -3714,13 +3753,25 @@ function resetCourseForm() {
   if (hint) hint.textContent = "";
 }
 
+function populateCourseFormationSelect(selectedId = "") {
+  const select = $("#courseFormationSelect");
+  if (!select) return;
+  const formations = state.formations.filter((f) => f.id && f.nome && normalize(f.publico || "").includes("professor"));
+  select.innerHTML = `<option value="">Selecione a formação</option>` +
+    formations.map((f) => `<option value="${esc(f.id)}">${esc(f.nome)}</option>`).join("");
+  const fallback = formations[0]?.id || "";
+  select.value = formations.some((f) => f.id === selectedId) ? selectedId : fallback;
+}
+
 function fillCourseForm(course) {
   const form = $("#courseFormEl");
   if (!form) return;
+  populateCourseFormationSelect(course.formacaoId);
   form.elements.nome.value = course.nome || "";
   form.elements.cargaHoraria.value = course.cargaHoraria || "";
   form.elements.trilha.value = course.trilha || "";
   form.elements.foto.value = "";
+  if (form.elements.dados) form.elements.dados.value = "";
   const title = $("#courseFormTitle");
   if (title) title.textContent = "Editar curso";
   const btn = $("#courseFormSubmitBtn");
@@ -3729,7 +3780,11 @@ function fillCourseForm(course) {
   if (hint) hint.textContent = course.foto ? "Uma foto já está cadastrada. Escolha outra imagem apenas se quiser substituir." : "";
 }
 
-function startNewCourse() {
+function startNewCourse(formacaoId = null) {
+  state.courseFormReturnMode = state.formationMode === "courses" && !state.teacherFormationId ? "courses-all" : "teachers-list";
+  state.formationMode = "teachers-list";
+  state.teacherAdminFormView = "list";
+  if (formacaoId) state.teacherFormationId = formacaoId;
   state.editingCourseId = null;
   state.courseAdminFormView = "form";
   resetCourseForm();
@@ -3739,6 +3794,10 @@ function startNewCourse() {
 function startEditCourse(id) {
   const course = state.courses.find((c) => c.id === id);
   if (!course) return;
+  state.courseFormReturnMode = state.formationMode === "courses" && !state.teacherFormationId ? "courses-all" : "courses-formation";
+  state.formationMode = "teachers-list";
+  state.teacherAdminFormView = "list";
+  state.teacherFormationId = course.formacaoId;
   state.editingCourseId = id;
   state.courseAdminFormView = "form";
   fillCourseForm(course);
@@ -3750,14 +3809,22 @@ async function saveCourse(event) {
   await withButtonBusy(event.submitter, "Salvando...", async () => {
     const form = new FormData(event.target);
     const nome = String(form.get("nome") || "").trim();
+    const formacaoId = String(form.get("formacaoId") || state.teacherFormationId || "").trim();
+    if (!formacaoId) {
+      notify("Selecione a formação", "Informe a qual formação este curso pertence.", "warning");
+      return;
+    }
     const editingCourse = state.courses.find((c) => c.id === state.editingCourseId);
     const foto = await readImageFile(form.get("foto"));
-    const course = editingCourse || { id: makeId(), formacaoId: state.teacherFormationId, createdAt: new Date().toISOString() };
+    const dadosFile = form.get("dados");
+    const course = editingCourse || { id: makeId(), createdAt: new Date().toISOString() };
 
+    course.formacaoId = formacaoId;
     course.nome = nome;
     course.cargaHoraria = String(form.get("cargaHoraria") || "").trim();
     course.trilha = String(form.get("trilha") || "").trim();
     if (foto) course.foto = foto;
+    state.teacherFormationId = formacaoId;
 
     if (!editingCourse) state.courses.push(course);
     try {
@@ -3767,8 +3834,22 @@ async function saveCourse(event) {
       saveStored("monitor-courses", state.courses);
       notify("Salvo localmente", `Erro: ${error?.message || "Sem conexão"}`, "warning");
     }
+    if (dadosFile && dadosFile.size) {
+      state.teacherRows = await loadTeacherRowsFromDb(formacaoId);
+      state.teacherFormationId = formacaoId;
+      state.selectedCourseId = course.id;
+      await importTeacherCsv(dadosFile);
+    }
+    const returnMode = state.courseFormReturnMode;
     state.editingCourseId = null;
     state.courseAdminFormView = "list";
+    if (returnMode === "courses-all") {
+      state.formationMode = "courses";
+      state.teacherFormationId = null;
+    } else if (returnMode === "courses-formation") {
+      state.formationMode = "courses";
+      state.teacherFormationId = formacaoId;
+    }
     resetCourseForm();
     render();
     renderCoursesList();
@@ -3787,22 +3868,52 @@ function confirmDeleteCourse(id) {
   renderCoursesList();
 }
 
+function teacherCourseSummaryHtml(formacaoId, formationRows = []) {
+  const courses = state.courses.filter((c) => c.formacaoId === formacaoId);
+  if (!courses.length) return `<div class="teacher-course-empty">Nenhum curso vinculado.</div>`;
+  const iconBook = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5z"/></svg>`;
+  const iconClock = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
+  return courses.slice(0, 10).map((course) => {
+    const rows = formationRows.filter((r) => r.cursoId === course.id);
+    const total = rows.length;
+    const done = rows.filter((r) => r.resultado === "Concluído").length;
+    const percent = total > 0 ? Math.round((done / total) * 100) : 0;
+    const trilhaStyle = course.trilha ? TRILHA_COLORS[course.trilha] : null;
+    const trilha = course.trilha
+      ? `<span class="teacher-course-pill" style="${trilhaStyle ? `background:${trilhaStyle.bg};border-color:${trilhaStyle.border};color:${trilhaStyle.color}` : ""}">${esc(course.trilha)}</span>`
+      : "";
+    return `
+      <div class="teacher-course-mini" title="${esc(`${course.nome} - ${percent}% de conclusão`)}">
+        ${course.foto
+          ? `<img class="teacher-course-photo" src="${esc(course.foto)}" alt="" />`
+          : `<div class="teacher-course-photo teacher-course-photo-fallback">${iconBook}</div>`}
+        <div class="teacher-course-copy">
+          <strong>${esc(course.nome)}</strong>
+          <div class="teacher-course-meta">
+            ${trilha}
+            ${course.cargaHoraria ? `<span class="teacher-course-pill">${iconClock}${esc(course.cargaHoraria)}</span>` : ""}
+          </div>
+        </div>
+        <span class="teacher-course-percent">${percent}%</span>
+      </div>
+    `;
+  }).join("");
+}
+
 function renderTeacherListCards() {
   const container = $("#teacherFormationCards");
   if (!container || state.formationMode !== "teachers-list") return;
   const isAdmin = hasAdminAccess();
   const formations = state.formations.filter((f) => f.id && f.nome && normalize(f.publico || "").includes("professor"));
-  const schools = state.base?.schools || [];
   const userGre = state.user?.gre;
 
   container.innerHTML = formations.map((f) => {
-    const totalEsp = isAdmin
-      ? schools.reduce((s, sc) => s + (sc.professores || 0), 0)
-      : schools.filter((sc) => sc.gre === userGre).reduce((s, sc) => s + (sc.professores || 0), 0);
-    const rows = state.teacherFormationId === f.id ? state.teacherRows : [];
+    const rows = state.teacherRows
+      .filter((r) => (r.formacaoId || state.teacherFormationId) === f.id)
+      .filter((r) => isAdmin || !userGre || r.gre === userGre);
     const naplanilha = rows.length;
     const concluidos = rows.filter((r) => r.resultado === "Concluído").length;
-    const pct = totalEsp > 0 ? Math.round((concluidos / totalEsp) * 100) : 0;
+    const pct = naplanilha > 0 ? Math.round((concluidos / naplanilha) * 100) : 0;
     const ts = f.lastImportedAt ? `<small class="event-updated">Base atualizada em ${esc(formatDateTime(f.lastImportedAt))}</small>` : "";
     const iconClock = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
     const iconCal = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`;
@@ -3811,7 +3922,7 @@ function renderTeacherListCards() {
       ? `<span class="formation-tag">${iconCal}${f.inicioFormacao ? formatDate(f.inicioFormacao) : ""}${f.inicioFormacao && f.fimFormacao ? " — " : ""}${f.fimFormacao ? formatDate(f.fimFormacao) : ""}</span>`
       : "";
     return `
-      <article class="event-card">
+      <article class="event-card teacher-formation-card">
         ${f.foto ? `<img class="event-photo" src="${esc(f.foto)}" alt="" />` : ""}
         <div class="event-card-top">
           <span class="event-type">Professores</span>
@@ -3834,7 +3945,7 @@ function renderTeacherListCards() {
   }).join("") || `<p class="muted" style="padding:24px">Nenhuma formação de professores cadastrada.</p>`;
 
   container.querySelectorAll("[data-open-teacher-formation]").forEach((b) => {
-    b.addEventListener("click", () => openCoursesArea(b.dataset.openTeacherFormation));
+    b.addEventListener("click", () => openTeacherFormationReport(b.dataset.openTeacherFormation));
   });
   container.querySelectorAll("[data-edit-teacher-formation]").forEach((b) => {
     b.addEventListener("click", () => startEditTeacherFormation(b.dataset.editTeacherFormation));
@@ -3849,18 +3960,20 @@ function renderTeachersArea() {
 
   const isAdmin = hasAdminAccess();
   const strictAdmin = state.user?.perfil === "admin";
-  // Update header to show course name when a course is selected
-  const currentCourse = state.selectedCourseId ? state.courses.find((c) => c.id === state.selectedCourseId) : null;
+  // Header stays at formation level; the course is selected in the filter.
   const headerNameEl = $("#teacherFormationName");
   if (headerNameEl) {
-    const formation = state.formations.find((f) => f.id === state.teacherFormationId);
-    headerNameEl.textContent = currentCourse ? currentCourse.nome : (formation?.nome || "Formação de Professores 2026");
+    const selectedFormationIds = getTeacherSelectedFormationIds();
+    const formation = state.formations.find((f) => f.id === selectedFormationIds[0]);
+    headerNameEl.textContent = selectedFormationIds.length === 1
+      ? (formation?.nome || "Formação de Professores 2026")
+      : "Relatório de formações";
   }
   const schoolRows = getTeacherSchoolRows();
   const allPersonRows = (() => {
     const userGre = state.user?.gre;
-    let rows = isAdmin ? state.teacherRows : state.teacherRows.filter((r) => r.gre === userGre);
-    if (state.selectedCourseId) rows = rows.filter((r) => r.cursoId === state.selectedCourseId);
+    let rows = getFilteredTeacherRowsByReportFilters();
+    if (!isAdmin) rows = rows.filter((r) => r.gre === userGre);
     return rows;
   })();
 
@@ -3883,9 +3996,9 @@ function renderTeachersArea() {
     const allItems = [
       { label: "Professores esperados", value: totalEsperado.toLocaleString("pt-BR"), variant: "metric-primary", adminOnly: true, icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>` },
       { label: "Professores inscritos", value: totalInscritos.toLocaleString("pt-BR"), variant: "metric-accent", icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="8" x2="16" y1="13" y2="13"/><line x1="8" x2="16" y1="17" y2="17"/></svg>` },
-      { label: "Concluídos", value: totalConcluidos.toLocaleString("pt-BR"), variant: "metric-ok", icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>` },
-      { label: "Em andamento", value: totalEmAndamento.toLocaleString("pt-BR"), variant: "metric-wait", icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>` },
       { label: "Não iniciados", value: totalNaoIniciados.toLocaleString("pt-BR"), sub: `${pctNaoIniciados}%`, variant: "metric-danger", icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>` },
+      { label: "Em andamento", value: totalEmAndamento.toLocaleString("pt-BR"), variant: "metric-wait", icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>` },
+      { label: "Concluídos", value: totalConcluidos.toLocaleString("pt-BR"), variant: "metric-ok", icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>` },
       { label: "Taxa de conclusão", value: `${pctGeral}%`, variant: "metric-ok", icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="18" y1="20" y2="10"/><line x1="12" x2="12" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="14"/></svg>` },
     ];
     const items = allItems.filter((m) => !m.adminOnly || strictAdmin);
@@ -3897,6 +4010,8 @@ function renderTeachersArea() {
       </div>
     `).join("");
   }
+
+  renderTeacherReportCourses();
 
   // Gráfico GRE (admin) / Insight regional
   if (isAdmin) {
@@ -3942,6 +4057,163 @@ function renderTeachersArea() {
 
   // Table
   renderTeachersTable();
+}
+
+function reportFilterOption({ type, value, label, checked, count = "" }) {
+  return `<label class="report-filter-option">
+    <input type="checkbox" data-report-draft="${type}" data-value="${esc(value)}" ${checked ? "checked" : ""} />
+    <span>${esc(label)}</span>${count !== "" ? `<small>${esc(count)}</small>` : ""}
+  </label>`;
+}
+
+function filterMenuHtml({ key, label, summary, optionsHtml }) {
+  const open = state.teacherReportFilterOpen === key;
+  return `
+    <div class="report-filter-menu ${open ? "open" : ""}">
+      <button class="report-filter-trigger" type="button" data-report-menu="${key}">
+        <span>${esc(label)}</span>
+        <strong>${esc(summary)}</strong>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+      <div class="report-filter-popover">
+        <div class="report-filter-options">${optionsHtml}</div>
+      </div>
+    </div>
+  `;
+}
+
+let _reportMsCleanup = null;
+
+function renderTeacherReportCourses() {
+  const container = $("#teacherReportCourses");
+  if (!container || state.formationMode !== "teachers") return;
+
+  if (_reportMsCleanup) { document.removeEventListener("click", _reportMsCleanup); _reportMsCleanup = null; }
+
+  const teacherFormations = state.formations.filter((f) => f.id && normalize(f.publico || "").includes("professor"));
+  const draftFormationIds = getTeacherDraftFormationIds();
+  const draftFormationSet = new Set(draftFormationIds);
+  const formationScopedCourses = state.courses.filter((c) => draftFormationSet.has(c.formacaoId));
+  const trilhas = [...new Set(formationScopedCourses.map((c) => c.trilha).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+
+  const formationSummary = state.teacherDraftFormationIds.length === 0
+    ? "Todas"
+    : state.teacherDraftFormationIds.length === 1
+      ? (teacherFormations.find((f) => f.id === state.teacherDraftFormationIds[0])?.nome || "1 selecionada")
+      : `${state.teacherDraftFormationIds.length} formações`;
+
+  const formationOptions = [
+    reportFilterOption({ type: "formation-all", value: "all", label: "Todas", checked: !state.teacherDraftFormationIds.length }),
+    ...teacherFormations.map((f) => reportFilterOption({ type: "formation", value: f.id, label: f.nome, checked: state.teacherDraftFormationIds.includes(f.id) })),
+  ].join("");
+
+  const courseSummary = state.teacherDraftCourseIds.length === 0
+    ? "Todos"
+    : state.teacherDraftCourseIds.length === 1
+      ? (formationScopedCourses.find((c) => c.id === state.teacherDraftCourseIds[0])?.nome || "1 selecionado")
+      : `${state.teacherDraftCourseIds.length} cursos`;
+
+  const trilhaSummary = state.teacherDraftTrilhas.length === 0
+    ? "Todas"
+    : state.teacherDraftTrilhas.length === 1
+      ? state.teacherDraftTrilhas[0]
+      : `${state.teacherDraftTrilhas.length} trilhas`;
+
+  const trilhaOptions = [
+    reportFilterOption({ type: "trilha-all", value: "all", label: "Todas", checked: !state.teacherDraftTrilhas.length }),
+    ...trilhas.map((t) => reportFilterOption({ type: "trilha", value: t, label: t, checked: state.teacherDraftTrilhas.includes(t) })),
+  ].join("");
+
+  const courseOptions = [
+    reportFilterOption({ type: "course-all", value: "all", label: "Todos", checked: !state.teacherDraftCourseIds.length }),
+    ...formationScopedCourses.map((c) => reportFilterOption({ type: "course", value: c.id, label: c.nome, checked: state.teacherDraftCourseIds.includes(c.id) })),
+  ].join("");
+
+  container.innerHTML = `
+    <div class="report-filter-panel panel">
+      <div class="report-filter-head">
+        <div>
+          <p class="eyebrow">Filtros</p>
+          <h3>Recorte do relatório</h3>
+        </div>
+      </div>
+      <div class="report-filter-toolbar">
+        ${filterMenuHtml({ key: "formacao", label: "Formação", summary: formationSummary, optionsHtml: formationOptions })}
+        ${filterMenuHtml({ key: "trilha", label: "Trilha", summary: trilhaSummary, optionsHtml: trilhaOptions })}
+        ${filterMenuHtml({ key: "curso", label: "Curso", summary: courseSummary, optionsHtml: courseOptions })}
+        <button class="report-filter-apply" type="button" id="applyTeacherReportFilters">Aplicar filtro</button>
+      </div>
+    </div>
+  `;
+
+  container.querySelectorAll("[data-report-menu]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const key = btn.dataset.reportMenu;
+      state.teacherReportFilterOpen = state.teacherReportFilterOpen === key ? "" : key;
+      renderTeacherReportCourses();
+    });
+  });
+
+  container.querySelectorAll("[data-report-draft]").forEach((input) => {
+    input.addEventListener("change", (e) => {
+      e.stopPropagation();
+      updateTeacherReportDraftFilter(input.dataset.reportDraft, input.dataset.value);
+      renderTeacherReportCourses();
+    });
+  });
+
+  _reportMsCleanup = (e) => {
+    if (!e.target.closest(".report-filter-menu")) {
+      if (state.teacherReportFilterOpen) {
+        state.teacherReportFilterOpen = "";
+        container.querySelectorAll(".report-filter-menu.open").forEach((m) => m.classList.remove("open"));
+      }
+    }
+  };
+  document.addEventListener("click", _reportMsCleanup);
+
+  $("#applyTeacherReportFilters")?.addEventListener("click", applyTeacherReportFilter);
+}
+
+function updateTeacherReportDraftFilter(type, value) {
+  const toggle = (list, item) => {
+    const set = new Set(list || []);
+    if (set.has(item)) set.delete(item);
+    else set.add(item);
+    return [...set];
+  };
+
+  if (type === "formation-all") state.teacherDraftFormationIds = [];
+  if (type === "formation") {
+    state.teacherDraftFormationIds = toggle(state.teacherDraftFormationIds, value);
+    if (!state.teacherDraftFormationIds.length) state.teacherDraftFormationIds = [];
+    state.teacherDraftCourseIds = state.teacherDraftCourseIds.filter((id) =>
+      state.courses.some((course) => course.id === id && getTeacherDraftFormationIds().includes(course.formacaoId))
+    );
+  }
+  if (type === "course-all") state.teacherDraftCourseIds = [];
+  if (type === "course") state.teacherDraftCourseIds = toggle(state.teacherDraftCourseIds, value);
+  if (type === "trilha-all") state.teacherDraftTrilhas = [];
+  if (type === "trilha") state.teacherDraftTrilhas = toggle(state.teacherDraftTrilhas, value);
+}
+
+async function applyTeacherReportFilter() {
+  state.teacherFilterFormationIds = [...(state.teacherDraftFormationIds || [])];
+  state.teacherFilterCourseIds = [...(state.teacherDraftCourseIds || [])];
+  state.teacherFilterTrilhas = [...(state.teacherDraftTrilhas || [])];
+  state.teacherReportFilterOpen = "";
+
+  state.selectedCourseId = state.teacherFilterCourseIds.length === 1 ? state.teacherFilterCourseIds[0] : null;
+  const formationIds = getTeacherSelectedFormationIds();
+  state.teacherFormationId = formationIds[0] || state.teacherFormationId;
+  showContentLoader();
+  try {
+    state.teacherRows = await loadTeacherRowsForFormations(formationIds);
+  } finally {
+    hideContentLoader();
+  }
+  renderTeachersArea();
 }
 
 function renderTeacherGreBars(schoolRows, strictAdmin = true) {
