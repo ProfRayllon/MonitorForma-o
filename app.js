@@ -4330,7 +4330,7 @@ function renderTeacherGreBars(schoolRows, strictAdmin = true) {
   const totalConcluidos = entries.reduce((s, e) => s + e.concluidos, 0);
   const totalBase = entries.reduce((s, e) => s + e.base, 0);
   const overallPercent = totalBase > 0 ? Math.round((totalConcluidos / totalBase) * 100) : 0;
-  const pieLabel = strictAdmin ? "esperados" : "na planilha";
+  const pieLabel = strictAdmin ? "esperados" : "inscritos";
 
   const barsEl = $("#teacherGreBars");
   if (barsEl) {
