@@ -33,6 +33,7 @@ const state = {
   teacherDraftCourseIds: [],
   teacherDraftTrilhas: [],
   teacherReportFilterOpen: "",
+  teacherLoadError: "",
   teachersView: "detail",
   teachersGreFilter: "todos",
   teachersSearch: "",
@@ -279,11 +280,15 @@ async function init() {
   } catch { state.courses = []; }
 
   try {
-    state.teacherFormationId = await ensureTeacherFormation();
-    if (state.teacherFormationId) {
-      state.teacherRows = await loadTeacherRowsFromDb(state.teacherFormationId);
-    }
-  } catch { state.teacherRows = []; }
+    await ensureTeacherFormation();
+    const teacherFormationIds = getTeacherFormationIds();
+    state.teacherFormationId = null;
+    state.teacherRows = await loadTeacherRowsForFormations(teacherFormationIds);
+    state.teacherLoadError = "";
+  } catch (error) {
+    state.teacherRows = [];
+    state.teacherLoadError = error?.message || "Nao foi possivel carregar os dados de professores do Supabase.";
+  }
 
   // bindEvents sempre executa, mesmo se algo acima falhou
   bindEvents();
@@ -1638,9 +1643,7 @@ async function openCoursesArea(formacaoId) {
 }
 
 async function openTeacherFormationReport(formacaoId = null, courseId = null) {
-  let teacherFormationIds = state.formations
-    .filter((f) => f.id && normalize(f.publico || "").includes("professor"))
-    .map((f) => f.id);
+  let teacherFormationIds = getTeacherFormationIds();
   let loadIds = formacaoId ? [formacaoId] : teacherFormationIds;
   const shouldLoad = !formacaoId || state.teacherFormationId !== formacaoId || !state.teacherRows.length;
   state.teacherFormationId = formacaoId;
@@ -1663,12 +1666,15 @@ async function openTeacherFormationReport(formacaoId = null, courseId = null) {
       if (!formacaoId && db) {
         state.formations = await loadFormations();
         state.courses = await loadCourses();
-        teacherFormationIds = state.formations
-          .filter((f) => f.id && normalize(f.publico || "").includes("professor"))
-          .map((f) => f.id);
+        teacherFormationIds = getTeacherFormationIds();
         loadIds = teacherFormationIds;
       }
       state.teacherRows = await loadTeacherRowsForFormations(loadIds);
+      state.teacherLoadError = "";
+    } catch (error) {
+      state.teacherRows = [];
+      state.teacherLoadError = error?.message || "Nao foi possivel carregar os dados de professores do Supabase.";
+      notify("Erro ao carregar professores", state.teacherLoadError, "error");
     } finally {
       hideContentLoader();
     }
@@ -3044,10 +3050,9 @@ async function refreshTeacherDataFromDb({ silent = false, keepMode = "" } = {}) 
   try {
     state.formations = await loadFormations();
     state.courses = await loadCourses();
-    const teacherFormationIds = state.formations
-      .filter((f) => f.id && normalize(f.publico || "").includes("professor"))
-      .map((f) => f.id);
+    const teacherFormationIds = getTeacherFormationIds();
     state.teacherRows = await loadTeacherRowsForFormations(teacherFormationIds);
+    state.teacherLoadError = "";
     if (!keepMode || state.formationMode === keepMode) {
       render();
       renderTeacherListCards();
@@ -3057,8 +3062,11 @@ async function refreshTeacherDataFromDb({ silent = false, keepMode = "" } = {}) 
     }
     return true;
   } catch (err) {
+    state.teacherRows = [];
+    state.teacherLoadError = err?.message || "Nao foi possivel carregar os dados de professores do Supabase.";
     if (!silent) throw err;
     console.warn("Nao foi possivel recarregar dados de professores.", err);
+    if (!keepMode || state.formationMode === keepMode) render();
     return false;
   } finally {
     if (silent) hideContentLoader();
@@ -3709,6 +3717,12 @@ function getGres() {
 
 // ─── PROFESSORES ────────────────────────────────────────────────────────────
 
+function getTeacherFormationIds() {
+  return state.formations
+    .filter((f) => f.id && normalize(f.publico || "").includes("professor"))
+    .map((f) => f.id);
+}
+
 async function ensureTeacherFormation() {
   const existing = state.formations.find((f) => normalize(f.publico || "").includes("professor"));
   if (existing) return existing.id;
@@ -3767,9 +3781,12 @@ async function loadTeacherRowsFromDb(formacaoId) {
       };
     });
     saveStored(localKey, mapped);
+    state.teacherLoadError = "";
     return mapped;
-  } catch {
-    return localRows;
+  } catch (error) {
+    state.teacherLoadError = error?.message || "Nao foi possivel carregar os dados de professores do Supabase.";
+    console.error("Erro ao carregar professor_dados do Supabase:", error);
+    throw error;
   }
 }
 
@@ -4593,6 +4610,39 @@ function renderTeacherListCards() {
 
 function renderTeachersArea() {
   if (state.formationMode !== "teachers") return;
+
+  if (state.teacherLoadError) {
+    const message = state.teacherLoadError;
+    const coursesEl = $("#teacherReportCourses");
+    if (coursesEl) {
+      coursesEl.innerHTML = `
+        <article class="panel">
+          <div class="panel-head compact-head">
+            <div>
+              <p class="eyebrow">Supabase</p>
+              <h3>Dados de professores nao carregaram</h3>
+              <p class="panel-subtitle">A tela nao vai usar cache local vazio. Resolva a leitura do banco ou tente recarregar.</p>
+            </div>
+            <button class="secondary" type="button" id="retryTeacherDbLoad">Atualizar dados</button>
+          </div>
+          <p class="error" style="margin:0">${esc(message)}</p>
+        </article>
+      `;
+      $("#retryTeacherDbLoad")?.addEventListener("click", () => openTeacherFormationReport(null));
+    }
+    const metricsEl = $("#teacherMetrics");
+    const barsEl = $("#teacherGreBars");
+    const legendEl = $("#teacherGreBarLegend");
+    const pieEl = $("#teacherGrePie");
+    const tableEl = $("#teacherTable");
+    if (metricsEl) metricsEl.innerHTML = "";
+    if (barsEl) barsEl.innerHTML = "";
+    if (legendEl) legendEl.innerHTML = "";
+    if (pieEl) pieEl.innerHTML = "";
+    $("#teacherRegionalInsight")?.classList.add("hidden");
+    if (tableEl) tableEl.innerHTML = `<tr><td class="empty-row">Dados nao carregados do Supabase.</td></tr>`;
+    return;
+  }
 
   const isAdmin = hasAdminAccess();
   const strictAdmin = state.user?.perfil === "admin";
