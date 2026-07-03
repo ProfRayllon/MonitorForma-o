@@ -249,6 +249,8 @@ function showPageLoader() {
 }
 
 async function init() {
+  clearTeacherRowsCache();
+
   // Carrega dados base — tenta caminhos alternativos para GitHub Pages
   const basePaths = ["data/base.json", "./data/base.json", "/data/base.json"];
   for (const path of basePaths) {
@@ -317,6 +319,16 @@ function loadStored(key, fallback) {
 
 function saveStored(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
+}
+
+function clearTeacherRowsCache() {
+  try {
+    Object.keys(localStorage)
+      .filter((key) => key.startsWith("monitor-teacher-rows-"))
+      .forEach((key) => localStorage.removeItem(key));
+  } catch {
+    // Ignora navegadores com storage indisponivel; Supabase segue como fonte dos dados.
+  }
 }
 
 async function selectAllDbRows(table, columns = "*", configure = (query) => query) {
@@ -3758,6 +3770,7 @@ async function loadTeacherRowsFromDb(formacaoId) {
   const localKey = "monitor-teacher-rows-" + formacaoId;
   const localRows = loadStored(localKey, []).map((r) => ({ ...r, formacaoId: r.formacaoId || formacaoId }));
   if (!db) return localRows;
+  try { localStorage.removeItem(localKey); } catch { /* cache local opcional */ }
   try {
     const rows = await selectAllDbRows("professor_dados", "nome,email,inep,conclusao,media,resultado,curso_id,imported_at", (q) =>
       q.eq("formacao_id", formacaoId).not("curso_id", "is", null).order("nome")
@@ -3780,7 +3793,6 @@ async function loadTeacherRowsFromDb(formacaoId) {
         formacaoId,
       };
     });
-    saveStored(localKey, mapped);
     state.teacherLoadError = "";
     return mapped;
   } catch (error) {
@@ -3798,12 +3810,16 @@ async function loadTeacherRowsForFormations(formacaoIds) {
 }
 
 async function persistTeacherRows(formacaoId, rows, cursoId = null) {
-  const localRows = (state.teacherRows?.length ? state.teacherRows : rows)
-    .filter((r) => (r.formacaoId || formacaoId) === formacaoId)
-    .map((r) => ({ ...r, formacaoId: r.formacaoId || formacaoId }));
-  saveStored("monitor-teacher-rows-" + formacaoId, localRows);
+  try { localStorage.removeItem("monitor-teacher-rows-" + formacaoId); } catch { /* cache local opcional */ }
   state.teacherPersistError = "";
-  if (!db) return false;
+  if (!db) {
+    try {
+      saveStored("monitor-teacher-rows-" + formacaoId, rows.map((r) => ({ ...r, formacaoId })));
+    } catch {
+      state.teacherPersistError = "Sem conexao com Supabase e sem espaco no navegador para salvar localmente.";
+    }
+    return false;
+  }
   try {
     notify("Salvando no banco...", rows.length.toLocaleString("pt-BR") + " professores - pode levar alguns segundos.", "warning");
     let delQuery = db.from("professor_dados").delete().eq("formacao_id", formacaoId);
