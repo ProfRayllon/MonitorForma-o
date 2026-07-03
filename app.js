@@ -1617,6 +1617,7 @@ function showTeachersArea(shouldRender = true) {
   if (shouldRender) {
     render();
     renderTeacherListCards();
+    refreshTeacherDataFromDb({ silent: true, keepMode: "teachers-list" });
   }
 }
 
@@ -1628,6 +1629,7 @@ function showTeachersCoursesArea(shouldRender = true) {
   if (shouldRender) {
     render();
     renderCoursesList();
+    refreshTeacherDataFromDb({ silent: true, keepMode: "courses" });
   }
 }
 
@@ -3016,25 +3018,42 @@ async function reloadTeacherData() {
   const originalHtml = btn?.innerHTML;
   if (btn) { btn.disabled = true; btn.textContent = "Atualizando..."; }
   try {
+    await refreshTeacherDataFromDb();
+    notify("Atualizado", "Dados de professores recarregados.", "success");
+  } catch (err) {
+    notify("Erro ao atualizar", err.message || "Verifique a conexao.", "error");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = originalHtml || "Atualizar dados";
+    }
+  }
+}
+
+async function refreshTeacherDataFromDb({ silent = false, keepMode = "" } = {}) {
+  if (!db) return false;
+  if (silent) showContentLoader();
+  try {
     state.formations = await loadFormations();
     state.courses = await loadCourses();
     const teacherFormationIds = state.formations
       .filter((f) => f.id && normalize(f.publico || "").includes("professor"))
       .map((f) => f.id);
     state.teacherRows = await loadTeacherRowsForFormations(teacherFormationIds);
-    render();
-    renderTeacherListCards();
-    renderCoursesList();
-    renderTeacherDashboard();
-    renderTeachersArea();
-    notify("Atualizado", "Dados de professores recarregados.", "success");
-  } catch (err) {
-    notify("Erro ao atualizar", err.message || "Verifique a conexão.", "error");
-  } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.innerHTML = originalHtml || "Atualizar dados";
+    if (!keepMode || state.formationMode === keepMode) {
+      render();
+      renderTeacherListCards();
+      renderCoursesList();
+      renderTeacherDashboard();
+      renderTeachersArea();
     }
+    return true;
+  } catch (err) {
+    if (!silent) throw err;
+    console.warn("Nao foi possivel recarregar dados de professores.", err);
+    return false;
+  } finally {
+    if (silent) hideContentLoader();
   }
 }
 
