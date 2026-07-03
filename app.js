@@ -1638,11 +1638,11 @@ async function openCoursesArea(formacaoId) {
 }
 
 async function openTeacherFormationReport(formacaoId = null, courseId = null) {
-  const teacherFormationIds = state.formations
+  let teacherFormationIds = state.formations
     .filter((f) => f.id && normalize(f.publico || "").includes("professor"))
     .map((f) => f.id);
-  const loadIds = formacaoId ? [formacaoId] : teacherFormationIds;
-  const shouldLoad = state.teacherFormationId !== formacaoId || !state.teacherRows.length;
+  let loadIds = formacaoId ? [formacaoId] : teacherFormationIds;
+  const shouldLoad = !formacaoId || state.teacherFormationId !== formacaoId || !state.teacherRows.length;
   state.teacherFormationId = formacaoId;
   state.teacherFilterFormationIds = formacaoId ? [formacaoId] : [];
   state.teacherFilterCourseIds = courseId ? [courseId] : [];
@@ -1660,6 +1660,14 @@ async function openTeacherFormationReport(formacaoId = null, courseId = null) {
   if (shouldLoad) {
     showContentLoader();
     try {
+      if (!formacaoId && db) {
+        state.formations = await loadFormations();
+        state.courses = await loadCourses();
+        teacherFormationIds = state.formations
+          .filter((f) => f.id && normalize(f.publico || "").includes("professor"))
+          .map((f) => f.id);
+        loadIds = teacherFormationIds;
+      }
       state.teacherRows = await loadTeacherRowsForFormations(loadIds);
     } finally {
       hideContentLoader();
