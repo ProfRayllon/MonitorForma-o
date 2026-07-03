@@ -3761,11 +3761,12 @@ async function persistTeacherRows(formacaoId, rows, cursoId = null) {
   state.teacherPersistError = "";
   if (!db) return false;
   try {
-    notify("Salvando no banco...", `${rows.length.toLocaleString("pt-BR")} professores — pode levar alguns segundos.`, "warning");
+    notify("Salvando no banco...", rows.length.toLocaleString("pt-BR") + " professores - pode levar alguns segundos.", "warning");
     let delQuery = db.from("professor_dados").delete().eq("formacao_id", formacaoId);
-    if (cursoId) delQuery = delQuery.eq("curso_id", cursoId);
+    delQuery = cursoId ? delQuery.eq("curso_id", cursoId) : delQuery.is("curso_id", null);
     const { error: delErr } = await delQuery;
     if (delErr) throw delErr;
+
     const dbRows = rows.map((r) => ({
       formacao_id: formacaoId,
       curso_id: cursoId || null,
@@ -3777,10 +3778,25 @@ async function persistTeacherRows(formacaoId, rows, cursoId = null) {
       resultado: r.resultado || "",
     }));
     await insertDbRows("professor_dados", dbRows, 500);
+
+    let checkQuery = db
+      .from("professor_dados")
+      .select("id", { count: "exact", head: true })
+      .eq("formacao_id", formacaoId);
+    checkQuery = cursoId ? checkQuery.eq("curso_id", cursoId) : checkQuery.is("curso_id", null);
+    const { count, error: checkErr } = await checkQuery;
+    if (checkErr) throw checkErr;
+    if (Number(count || 0) < rows.length) {
+      throw new Error("Importacao nao confirmada no Supabase. Verifique se a tabela professor_dados possui a coluna curso_id e politicas de insert/select.");
+    }
+
     return true;
   } catch (err) {
-    console.warn("Não foi possível salvar professores no Supabase.", err);
-    state.teacherPersistError = err?.message || "Erro desconhecido ao salvar no Supabase.";
+    console.warn("Nao foi possivel salvar professores no Supabase.", err);
+    const message = err?.message || "Erro desconhecido ao salvar no Supabase.";
+    state.teacherPersistError = /curso_id|schema cache|column/i.test(message)
+      ? "O banco nao esta atualizado para salvar dados por curso. Execute o supabase_schema.sql atualizado no Supabase e tente importar novamente."
+      : message;
     return false;
   }
 }

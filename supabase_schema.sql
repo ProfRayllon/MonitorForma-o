@@ -148,7 +148,8 @@ create table if not exists public.professor_dados (
 
 alter table public.professor_dados
   add column if not exists media numeric(5,2) not null default 0,
-  add column if not exists resultado text not null default '';
+  add column if not exists resultado text not null default '',
+  add column if not exists imported_at timestamptz not null default now();
 
 create index if not exists professor_dados_formacao_id_idx
   on public.professor_dados (formacao_id);
@@ -204,6 +205,9 @@ create policy "Excluir cursos publicamente" on public.cursos for delete using (t
 -- Adiciona curso_id em professor_dados
 alter table public.professor_dados
   add column if not exists curso_id uuid references public.cursos(id) on delete set null;
+
+create index if not exists professor_dados_curso_id_idx
+  on public.professor_dados (curso_id);
 
 -- Adiciona trilha em cursos
 alter table public.cursos
