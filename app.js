@@ -3791,12 +3791,19 @@ function parseTeacherRows(rows2D) {
   const idx = {};
   rawHeaders.forEach((h, i) => { if (!(h in idx)) idx[h] = i; });
 
-  // busca exata, depois por prefixo (lida com headers longos como "Conclusão (Clique...)")
+  // busca exata, depois por prefixo, depois por substring (lida com headers longos
+  // como "Conclusão (Clique...)" ou "Escola (INEP)" / "% de Conclusão")
   const col = (row, ...keys) => {
     for (const k of keys) {
       if (idx[k] !== undefined) return String(row[idx[k]] ?? "").trim();
+    }
+    for (const k of keys) {
       const prefixKey = Object.keys(idx).find((h) => h.startsWith(k) || k.startsWith(h));
       if (prefixKey !== undefined) return String(row[idx[prefixKey]] ?? "").trim();
+    }
+    for (const k of keys) {
+      const includesKey = Object.keys(idx).find((h) => h.includes(k));
+      if (includesKey !== undefined) return String(row[idx[includesKey]] ?? "").trim();
     }
     return "";
   };
@@ -3808,7 +3815,7 @@ function parseTeacherRows(rows2D) {
   rows2D.slice(1).forEach((row) => {
     const inep = col(row, "inep", "codigoinep", "codinep");
     if (!inep) return;
-    const nome = col(row, "nome", "nomeservidor", "nomeprofessor");
+    const nome = col(row, "nome", "nomeservidor", "nomeprofessor", "professor");
     const email = col(row, "email", "emailservidor");
     const conclusaoRaw = col(row, "conclusao", "conclusao2026", "percentual", "pct", "progresso");
 
