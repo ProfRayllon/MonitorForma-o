@@ -3,7 +3,13 @@ const state = {
   user: null,
   dbConnected: false,
   tab: "formation",
-  formationMode: "home",
+  formationMode: "directors",
+  directorView: "overview",
+  directorOverviewFormationId: "todos",
+  directorOverviewGre: "todos",
+  directorOverviewStatus: "todos",
+  directorOverviewSearch: "",
+  directorOverviewFormationGreMode: "credenciadas",
   selectedFormationId: null,
   adminFormationView: "list",
   editingFormationId: null,
@@ -27,10 +33,11 @@ const state = {
   teacherDraftCourseIds: [],
   teacherDraftTrilhas: [],
   teacherReportFilterOpen: "",
-  teachersView: "school",
+  teachersView: "detail",
   teachersGreFilter: "todos",
   teachersSearch: "",
   teachersConclusaoFilter: "todos",
+  teacherRegionalGaugeView: "professor",
   teacherAdminFormView: "list",
   teacherPersistError: "",
   courses: [],
@@ -42,6 +49,10 @@ const state = {
   dashboardCourseFilter: "todos",
   dashboardSchoolSearch: "",
   teacherTablePage: 1,
+  teacherSortKey: null,
+  teacherSortDir: "asc",
+  teacherPersonSortKey: null,
+  teacherPersonSortDir: "asc",
   dashboardCoursePage: 1,
   dashboardSchoolPage: 1,
   schoolsTablePage: 1,
@@ -60,7 +71,6 @@ const on = (selector, event, handler) => {
   const element = $(selector);
   if (element) element.addEventListener(event, handler);
 };
-
 const normalize = (value) =>
   String(value || "")
     .replace(/^﻿/, "")
@@ -599,11 +609,13 @@ function formatDate(value) {
   return `${d}/${m}/${y}`;
 }
 
+const CLOCK_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
+
 function renderImportTimestamp(formation, isAdmin = hasAdminAccess()) {
   const importTimestamp = $("#formationImportTimestamp");
   if (!importTimestamp) return;
   const label = formatDateTime(formation?.lastImportedAt);
-  importTimestamp.textContent = label ? `Base atualizada em ${label}` : "Base ainda não importada";
+  importTimestamp.innerHTML = `${CLOCK_ICON}<span>${label ? `Base atualizada em ${label}` : "Base ainda não importada"}</span>`;
   importTimestamp.classList.toggle("hidden", !label && !isAdmin);
 }
 
@@ -877,12 +889,46 @@ function bindEvents() {
   on("#loginForm", "submit", handleLogin);
   on("#logoutButton", "click", logout);
   on("#directorsChoice", "click", showDirectorsArea);
-  on("#teachersChoice", "click", showTeachersArea);
+  on("#teachersChoice", "click", () => openTeacherFormationReport(null));
+  on("#teachersOverviewBtn", "click", () => openTeacherFormationReport(null));
+  on("#teachersFormationsBtn", "click", showTeachersArea);
+  on("#teachersCoursesBtn", "click", showTeachersCoursesArea);
+  on("#teachersAddBtn", "click", () => {
+    if (state.formationMode === "courses") startNewCourse(null);
+    else startNewTeacherFormation();
+  });
   on("#formationForm", "submit", saveFormation);
   on("#cancelFormationForm", "click", () => showAdminFormationView("list"));
   on("#backToFormations", "click", closeFormationDetail);
+  on("#directorsOverviewBtn", "click", showDirectorsOverview);
+  on("#directorsFormationsBtn", "click", showDirectorsFormations);
   on("#reloadFormationsBtn", "click", reloadAllFormations);
-  on("#reloadRecursoBtn", "click", reloadRecursoMap);
+  on("#directorsOverviewSearch", "input", () => {
+    state.directorOverviewSearch = $("#directorsOverviewSearch")?.value || "";
+    renderDirectorOverview();
+  });
+  on("#directorsOverviewFormationFilter", "change", () => {
+    state.directorOverviewFormationId = $("#directorsOverviewFormationFilter")?.value || "todos";
+    renderDirectorOverview();
+  });
+  on("#directorsOverviewGreFilter", "change", () => {
+    state.directorOverviewGre = $("#directorsOverviewGreFilter")?.value || "todos";
+    renderDirectorOverview();
+  });
+  on("#directorsOverviewStatusFilter", "change", () => {
+    state.directorOverviewStatus = $("#directorsOverviewStatusFilter")?.value || "todos";
+    renderDirectorOverview();
+  });
+  on("#directorsOverviewClearGre", "click", () => {
+    state.directorOverviewGre = "todos";
+    renderDirectorOverview();
+  });
+  $$("#directorsOverviewFormationGreToggle [data-formation-gre-mode]").forEach((b) => {
+    b.addEventListener("click", () => {
+      state.directorOverviewFormationGreMode = b.dataset.formationGreMode;
+      renderDirectorOverview();
+    });
+  });
   on("#importCsvBtn", "click", () => $("#importCsvInput")?.click());
   on("#importCsvInput", "change", (e) => {
     const file = e.target.files?.[0];
@@ -927,15 +973,7 @@ function bindEvents() {
   on("#closeAddUserDialog", "click", () => $("#addUserDialog").close());
   on("#cancelAddUser", "click", () => $("#addUserDialog").close());
 
-  on("#reloadTeacherListBtn", "click", async () => {
-    if (!state.teacherFormationId) return;
-    showContentLoader();
-    state.teacherRows = await loadTeacherRowsFromDb(state.teacherFormationId);
-    renderTeacherListCards();
-    hideContentLoader();
-    notify("Atualizado", "Dados de professores recarregados.", "success");
-  });
-  on("#addTeacherFormationBtn", "click", startNewTeacherFormation);
+  on("#reloadTeacherListBtn", "click", reloadTeacherData);
   on("#teacherFormForm", "submit", saveTeacherFormation);
   on("#cancelTeacherFormBtn", "click", () => {
     state.editingFormationId = null;
@@ -948,6 +986,22 @@ function bindEvents() {
   on("#teacherGreFilter", "change", () => { state.teachersGreFilter = $("#teacherGreFilter")?.value || "todos"; state.teacherTablePage = 1; withContentLoader(() => renderTeachersArea()); });
   on("#teacherConclusaoFilter", "change", () => { state.teachersConclusaoFilter = $("#teacherConclusaoFilter")?.value || "todos"; state.teacherTablePage = 1; withContentLoader(() => renderTeachersArea()); });
   on("#downloadTeacherSpreadsheet", "click", downloadTeacherSpreadsheet);
+  on("#teacherTableHead", "click", (e) => {
+    const th = e.target.closest("[data-sort-key], [data-person-sort-key]");
+    if (!th) return;
+    const isPerson = th.hasAttribute("data-person-sort-key");
+    const key = isPerson ? th.dataset.personSortKey : th.dataset.sortKey;
+    const keyField = isPerson ? "teacherPersonSortKey" : "teacherSortKey";
+    const dirField = isPerson ? "teacherPersonSortDir" : "teacherSortDir";
+    if (state[keyField] === key) {
+      state[dirField] = state[dirField] === "asc" ? "desc" : "asc";
+    } else {
+      state[keyField] = key;
+      state[dirField] = key === "escola" || key === "gre" || key === "inep" || key === "nome" || key === "resultado" ? "asc" : "desc";
+    }
+    state.teacherTablePage = 1;
+    renderTeachersTable();
+  });
   $$("[data-teacher-view]").forEach((b) => {
     b.addEventListener("click", () => {
       state.teachersView = b.dataset.teacherView;
@@ -958,10 +1012,14 @@ function bindEvents() {
       withContentLoader(() => renderTeachersArea());
     });
   });
+  $$("[data-regional-gauge-view]").forEach((b) => {
+    b.addEventListener("click", () => {
+      state.teacherRegionalGaugeView = b.dataset.regionalGaugeView;
+      renderTeacherRegionalGauge(getTeacherSchoolRows());
+    });
+  });
 
   $$("[data-back-home]").forEach((b) => b.addEventListener("click", showFormationHome));
-  on("#teachersBackBtn", "click", backFromTeachers);
-  on("#backToTeachersListBtn", "click", showTeachersArea);
   on("#dashboardBtn", "click", openTeacherDashboard);
   on("#backFromDashboardBtn", "click", showTeachersArea);
   on("#exportDashboardXlsx", "click", exportDashboardXlsx);
@@ -969,8 +1027,6 @@ function bindEvents() {
   on("#dashFilterGre", "change", () => { state.dashboardGreFilter = $("#dashFilterGre")?.value || "todos"; state.dashboardCoursePage = 1; state.dashboardSchoolPage = 1; renderTeacherDashboard(); });
   on("#dashFilterCourse", "change", () => { state.dashboardCourseFilter = $("#dashFilterCourse")?.value || "todos"; state.dashboardCoursePage = 1; state.dashboardSchoolPage = 1; renderTeacherDashboard(); });
   on("#dashSchoolSearch", "input", () => { state.dashboardSchoolSearch = $("#dashSchoolSearch")?.value || ""; state.dashboardSchoolPage = 1; renderDashboardSchoolTable(); });
-  on("#addCourseBtn", "click", () => startNewCourse(state.teacherFormationId));
-  on("#coursesGlobalBtn", "click", showAllCoursesArea);
   on("#courseFormEl", "submit", saveCourse);
   on("#cancelCourseFormBtn", "click", () => {
     const returnMode = state.courseFormReturnMode;
@@ -997,9 +1053,10 @@ function bindEvents() {
   });
   $$(".nav-item").forEach((b) => {
     b.addEventListener("click", () => {
-      if (b.dataset.tab === "formations") state.formationMode = "home";
       state.tab = b.dataset.tab;
-      withContentLoader(() => render());
+      if (b.dataset.formationPage === "directors") { showDirectorsArea(false); withContentLoader(() => render()); }
+      else if (b.dataset.formationPage === "teachers") { openTeacherFormationReport(null); }
+      else { withContentLoader(() => render()); }
     });
   });
 }
@@ -1089,7 +1146,7 @@ function logout() {
   clearTimeout(_autoSaveTimer);
   state.user = null;
   localStorage.removeItem(SESSION_KEY);
-  state.formationMode = "home";
+  state.formationMode = "directors";
   state.selectedFormationId = null;
   document.querySelector('[data-view="dashboard"]').classList.add("hidden");
   document.querySelector('[data-view="login"]').classList.remove("hidden");
@@ -1100,6 +1157,7 @@ function render() {
   renderShell();
   renderTabs();
   renderFormationMode();
+  renderDirectorOverview();
   renderFormationCards();
   renderTeacherListCards();
   renderCoursesList();
@@ -1118,12 +1176,13 @@ function renderShell() {
   $("#profileLabel").textContent =
     state.tab === "users" ? "Administrativo" :
     state.tab === "home" ? "Painel geral" :
-    state.tab === "profile" ? "Configurações" : "Formação";
+    state.tab === "profile" ? "Configurações" :
+    isTeacherFormationPage() ? "Professores" : "Diretores";
   $("#pageTitle").textContent =
     state.tab === "users" ? "Gerenciamento de usuarios" :
     state.tab === "home" ? "Visao geral do sistema" :
     state.tab === "profile" ? "Meu Perfil" :
-    "Acompanhamento de formacoes";
+    isTeacherFormationPage() ? "Formações de professores" : "Formações de diretores";
   const strictAdmin = state.user?.perfil === "admin";
   $$(".admin-only").forEach((el) => el.classList.toggle("hidden", !isAdmin));
   $$(".strict-admin-only").forEach((el) => el.classList.toggle("hidden", !strictAdmin));
@@ -1136,42 +1195,29 @@ function renderSidebarUser() {
   const el = $("#sidebarUser");
   if (!el || !state.user) return;
   const perfil = state.user.perfil;
-  const badgeClass = perfil === "admin" ? "admin" : perfil === "intermediario" ? "intermediario" : "regional";
-  const badgeText = perfil === "admin" ? "Administrador" : perfil === "intermediario" ? "Intermediário" : "Regional";
+  const scopeText = perfil === "admin" ? "Administrador geral" : perfil === "intermediario" ? "Intermediário" : esc(state.user.gre);
   el.innerHTML = `
     <div class="sidebar-user-inner">
-      <div class="user-avatar">${esc(userInitials(state.user.nome))}</div>
+      <div class="user-avatar sidebar-avatar">${esc(userInitials(state.user.nome))}</div>
       <div class="user-meta">
         <strong>${esc(state.user.nome)}</strong>
-        <small><span class="role-badge ${badgeClass}">${badgeText}</span></small>
+        <small>${scopeText}</small>
       </div>
     </div>
   `;
 }
 
 function renderTopbarUser() {
-  const el = $("#topbarUserWrap");
-  if (!el || !state.user) return;
-  const perfil = state.user.perfil;
-  const scopeText = perfil === "admin" ? "Administrador geral" : perfil === "intermediario" ? "Intermediário" : esc(state.user.gre);
-  el.innerHTML = `
-    <div class="topbar-user-info">
-      <strong>${esc(state.user.nome)}</strong>
-      <small>${scopeText}</small>
-    </div>
-    <div class="user-avatar">${esc(userInitials(state.user.nome))}</div>
-  `;
-
   const badge = $("#dbStatusBadge");
   if (!badge) return;
   if (state.dbConnected) {
     badge.className = "db-status-badge connected";
     badge.innerHTML = `<span class="db-status-dot"></span>Supabase conectado`;
-    badge.title = "Banco de dados online — dados sincronizados entre navegadores";
+    badge.title = "Banco de dados online - dados sincronizados entre navegadores";
   } else {
     badge.className = "db-status-badge disconnected";
     badge.innerHTML = `<span class="db-status-dot"></span>Sem sincronização`;
-    badge.title = "Sem conexao com Supabase — dados salvos apenas neste navegador";
+    badge.title = "Sem conexao com Supabase - dados salvos apenas neste navegador";
   }
 }
 
@@ -1180,8 +1226,19 @@ function renderTabs() {
   const strictAdmin = state.user?.perfil === "admin";
   if (!isAdmin && (state.tab === "users" || state.tab === "home")) state.tab = "formation";
   if (!strictAdmin && state.tab === "users") state.tab = "formation";
-  $$(".nav-item").forEach((b) => b.classList.toggle("active", b.dataset.tab === state.tab));
+  $$(".nav-item").forEach((b) => {
+    const formationPage = b.dataset.formationPage;
+    const isActive =
+      formationPage === "directors" ? state.tab === "formation" && !isTeacherFormationPage() :
+      formationPage === "teachers" ? state.tab === "formation" && isTeacherFormationPage() :
+      b.dataset.tab === state.tab;
+    b.classList.toggle("active", isActive);
+  });
   $$(".tab-panel").forEach((p) => p.classList.toggle("hidden", p.dataset.panel !== state.tab));
+}
+
+function isTeacherFormationPage() {
+  return ["teachers-list", "courses", "teacher-dashboard", "teachers"].includes(state.formationMode);
 }
 
 function renderHome() {
@@ -1521,49 +1578,71 @@ async function savePassword(event) {
 }
 
 function showFormationHome() {
-  state.formationMode = "home";
-  state.selectedFormationId = null;
-  state.adminFormationView = "list";
-  state.editingFormationId = null;
-  render();
+  showDirectorsArea();
 }
 
-function showDirectorsArea() {
+function showDirectorsArea(shouldRender = true) {
   state.formationMode = "directors";
+  state.directorView = "overview";
+  state.selectedFormationId = null;
+  state.adminFormationView = "list";
+  state.editingFormationId = null;
+  if (shouldRender) render();
+}
+
+function showDirectorsOverview() {
+  state.formationMode = "directors";
+  state.directorView = "overview";
   state.selectedFormationId = null;
   state.adminFormationView = "list";
   state.editingFormationId = null;
   render();
 }
 
-function showTeachersArea() {
+function showDirectorsFormations() {
+  state.formationMode = "directors";
+  state.directorView = "list";
+  state.selectedFormationId = null;
+  state.adminFormationView = "list";
+  state.editingFormationId = null;
+  render();
+}
+
+function showTeachersArea(shouldRender = true) {
   state.formationMode = "teachers-list";
   state.selectedFormationId = null;
   state.teacherAdminFormView = "list";
   state.courseAdminFormView = "list";
   state.selectedCourseId = null;
-  render();
-  renderTeacherListCards();
+  if (shouldRender) {
+    render();
+    renderTeacherListCards();
+  }
 }
 
-function showAllCoursesArea() {
+function showTeachersCoursesArea(shouldRender = true) {
   state.formationMode = "courses";
   state.teacherFormationId = null;
   state.selectedCourseId = null;
   state.courseAdminFormView = "list";
-  render();
-  renderCoursesList();
+  if (shouldRender) {
+    render();
+    renderCoursesList();
+  }
 }
 
 async function openCoursesArea(formacaoId) {
   await openTeacherFormationReport(formacaoId);
 }
 
-async function openTeacherFormationReport(formacaoId, courseId = null) {
-  if (!formacaoId) return;
+async function openTeacherFormationReport(formacaoId = null, courseId = null) {
+  const teacherFormationIds = state.formations
+    .filter((f) => f.id && normalize(f.publico || "").includes("professor"))
+    .map((f) => f.id);
+  const loadIds = formacaoId ? [formacaoId] : teacherFormationIds;
   const shouldLoad = state.teacherFormationId !== formacaoId || !state.teacherRows.length;
   state.teacherFormationId = formacaoId;
-  state.teacherFilterFormationIds = [formacaoId];
+  state.teacherFilterFormationIds = formacaoId ? [formacaoId] : [];
   state.teacherFilterCourseIds = courseId ? [courseId] : [];
   state.teacherFilterTrilhas = [];
   state.teacherDraftFormationIds = [...state.teacherFilterFormationIds];
@@ -1571,7 +1650,7 @@ async function openTeacherFormationReport(formacaoId, courseId = null) {
   state.teacherDraftTrilhas = [];
   state.teacherReportFilterOpen = "";
   state.selectedCourseId = courseId;
-  state.teachersView = "school";
+  state.teachersView = "detail";
   state.teachersGreFilter = "todos";
   state.teachersConclusaoFilter = "todos";
   state.teachersSearch = "";
@@ -1579,7 +1658,7 @@ async function openTeacherFormationReport(formacaoId, courseId = null) {
   if (shouldLoad) {
     showContentLoader();
     try {
-      state.teacherRows = await loadTeacherRowsForFormations(state.teacherFilterFormationIds);
+      state.teacherRows = await loadTeacherRowsForFormations(loadIds);
     } finally {
       hideContentLoader();
     }
@@ -1593,17 +1672,15 @@ async function openCourseMetrics(courseId) {
   await openTeacherFormationReport(course.formacaoId, course.id);
 }
 
-function backFromTeachers() {
-  showTeachersArea();
-}
-
 function closeFormationDetail() {
   state.selectedFormationId = null;
+  state.directorView = "list";
   render();
 }
 
 function showAdminFormationView(view) {
   state.adminFormationView = view === "form" ? "form" : "list";
+  state.directorView = state.adminFormationView === "form" ? "form" : "list";
   state.selectedFormationId = null;
   if (state.adminFormationView === "form") {
     state.editingFormationId = null;
@@ -1618,20 +1695,33 @@ function showAdminFormationView(view) {
 
 
 function renderFormationMode() {
+  if (state.formationMode === "home") state.formationMode = "directors";
   const isAdmin = hasAdminAccess();
+  const isDirectors = state.tab === "formation" && state.formationMode === "directors";
+  const isTeachers = state.tab === "formation" && ["teachers-list", "courses", "teacher-dashboard", "teachers"].includes(state.formationMode);
+  const showOverview = isDirectors && state.directorView === "overview" && !state.selectedFormationId;
   const showForm = isAdmin && state.adminFormationView === "form" && !state.selectedFormationId;
   const showTeacherForm = isAdmin && state.teacherAdminFormView === "form" && state.formationMode === "teachers-list";
   const showCourseForm = isAdmin && state.courseAdminFormView === "form" && state.formationMode === "teachers-list";
+  $("#directorsTopActions")?.classList.toggle("hidden", !isDirectors);
+  $("#teachersTopActions")?.classList.toggle("hidden", !isTeachers);
+  $("#teachersOverviewBtn")?.classList.toggle("active", state.formationMode === "teachers" && !state.teacherFormationId);
+  $("#teachersFormationsBtn")?.classList.toggle("active", state.formationMode === "teachers-list" || (state.formationMode === "teachers" && Boolean(state.teacherFormationId)));
+  $("#teachersCoursesBtn")?.classList.toggle("active", state.formationMode === "courses");
+  $("#teachersAddBtn")?.classList.toggle("hidden", !isAdmin || !(state.formationMode === "teachers-list" || state.formationMode === "courses"));
   $("#formationHome").classList.toggle("hidden", state.formationMode !== "home");
   $("#teachersListArea").classList.toggle("hidden", state.formationMode !== "teachers-list");
   $("#coursesArea").classList.toggle("hidden", state.formationMode !== "courses");
   $("#teacherDashboardArea").classList.toggle("hidden", state.formationMode !== "teacher-dashboard");
   $("#teachersArea").classList.toggle("hidden", state.formationMode !== "teachers");
   $("#directorsArea").classList.toggle("hidden", state.formationMode !== "directors");
+  $("#directorsOverview")?.classList.toggle("hidden", !showOverview);
   $("#formationDetail").classList.toggle("hidden", !state.selectedFormationId);
   $("#formationForm").classList.toggle("hidden", !showForm);
-  $("#formationCards").classList.toggle("hidden", Boolean(state.selectedFormationId) || showForm);
-  $("#formationListHeader").classList.toggle("hidden", Boolean(state.selectedFormationId));
+  $("#formationCards").classList.toggle("hidden", Boolean(state.selectedFormationId) || showForm || showOverview);
+  $("#formationListHeader").classList.toggle("hidden", Boolean(state.selectedFormationId) || showForm || showOverview);
+  $("#directorsOverviewBtn")?.classList.toggle("active", showOverview);
+  $("#directorsFormationsBtn")?.classList.toggle("active", isDirectors && state.directorView === "list" && !showForm && !showOverview);
   $$("[data-formation-admin-view]").forEach((b) => {
     b.classList.toggle("active", b.dataset.formationAdminView === state.adminFormationView);
   });
@@ -1684,6 +1774,7 @@ async function saveFormation(event) {
     state.selectedFormationId = null;
     state.editingFormationId = null;
     state.adminFormationView = "list";
+    state.directorView = "list";
     resetFormationForm();
     render();
   });
@@ -1705,6 +1796,7 @@ function startEditFormation(id) {
   if (!formation) return;
   state.editingFormationId = id;
   state.adminFormationView = "form";
+  state.directorView = "form";
   state.selectedFormationId = null;
   fillFormationForm(formation);
   render();
@@ -2008,12 +2100,407 @@ function daysUntil(dateStr) {
   return Math.ceil((target - today) / 86400000);
 }
 
+function directorFormations() {
+  return state.formations.filter((f) => f.id && f.nome && !normalize(f.publico || "").includes("professor"));
+}
+
+function formationUrgentDeadline(formation) {
+  const candidates = [
+    { label: "Fim das inscrições", days: daysUntil(formation.prazoInscricoes) },
+    { label: "Recurso de inscrição", days: daysUntil(formation.prazoRecursoInscricao) },
+    { label: "Recurso de credenciamento", days: daysUntil(formation.prazoRecursoCredenciamento) },
+    { label: "Evento", days: daysUntil(formation.dataEvento) },
+  ].filter((c) => c.days !== null);
+  if (!candidates.length) return null;
+  const upcoming = candidates.filter((c) => c.days >= 0).sort((a, b) => a.days - b.days)[0];
+  return upcoming || candidates.sort((a, b) => b.days - a.days)[0];
+}
+
+function renderDirectorOverview() {
+  if (state.formationMode !== "directors" || state.directorView !== "overview") return;
+  const section = $("#directorsOverview");
+  if (!section) return;
+
+  const formations = directorFormations();
+  syncDirectorOverviewFilters(formations);
+  const rows = filteredDirectorOverviewRows(formations);
+  const total = rows.length;
+  const inscritos = rows.filter((r) => r.inscrito).length;
+  const naoInscritos = total - inscritos;
+  const credenciados = rows.filter((r) => r.credenciado).length;
+  const naoCredenciados = total - credenciados;
+  const formationCount = new Set(rows.map((r) => r.formationId)).size;
+  const distinctSchools = new Set(rows.map((r) => r.inep)).size;
+  const distinctGres = new Set(rows.map((r) => r.gre).filter(Boolean)).size;
+  $("#directorsOverviewChartsRow")?.classList.toggle("side-by-side", distinctGres > 0 && distinctGres <= 4);
+
+  const lastUpdate = formations.reduce((latest, f) => {
+    if (!f.lastImportedAt) return latest;
+    return !latest || new Date(f.lastImportedAt) > new Date(latest) ? f.lastImportedAt : latest;
+  }, null);
+  const updatedTag = $("#directorsOverviewUpdated");
+  if (updatedTag) {
+    updatedTag.innerHTML = lastUpdate ? `${CLOCK_ICON}<span>Base atualizada em ${formatDateTime(lastUpdate)}</span>` : "";
+    updatedTag.classList.toggle("hidden", !lastUpdate);
+  }
+
+  const iconByKey = Object.fromEntries(METRIC_CONFIGS.map((c) => [c.key, c]));
+  const formacoesIcon = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>`;
+  const countOf = (n) => Number(n).toLocaleString("pt-BR");
+  const rateHelper = (n) => `${countOf(n)} de ${countOf(total)} escolas`;
+  const metricConfigs = [
+    { key: "formacoes", label: "Formações", display: countOf(formationCount), helper: `${formations.length} cadastradas`, cls: "metric-primary", icon: formacoesIcon, status: null },
+    { key: "total", label: "Total de escolas", display: countOf(distinctSchools), helper: "escolas distintas no recorte", cls: "metric-primary", icon: iconByKey.total.icon, status: null },
+    { key: "inscritas", label: "Inscritas", display: pct(inscritos, total), helper: rateHelper(inscritos), cls: "metric-ok", icon: iconByKey.inscritas.icon, status: "inscritas" },
+    { key: "nao-inscritas", label: "Não inscritas", display: pct(naoInscritos, total), helper: rateHelper(naoInscritos), cls: "metric-danger", icon: iconByKey["nao-inscritas"].icon, status: "nao-inscritas" },
+    { key: "credenciadas", label: "Credenciadas", display: pct(credenciados, total), helper: rateHelper(credenciados), cls: "metric-accent", icon: iconByKey.credenciadas.icon, status: "credenciadas" },
+    { key: "nao-credenciadas", label: "Não credenciadas", display: pct(naoCredenciados, total), helper: rateHelper(naoCredenciados), cls: "metric-wait", icon: iconByKey["nao-credenciadas"].icon, status: "nao-credenciadas" },
+  ];
+
+  $("#directorsOverviewMetrics").innerHTML = metricConfigs.map((item) => `
+    <article class="metric ${item.cls}${item.status ? " metric-clickable" : ""}${item.status && state.directorOverviewStatus === item.status ? " metric-active" : ""}" ${item.status ? `data-overview-status="${item.status}" tabindex="0"` : ""}>
+      <div class="metric-icon">${item.icon}</div>
+      <span>${esc(item.label)}</span>
+      <strong>${item.display}</strong>
+      <small>${esc(item.helper)}</small>
+    </article>
+  `).join("");
+
+  $$("#directorsOverviewMetrics [data-overview-status]").forEach((card) => {
+    card.addEventListener("click", () => {
+      const status = card.dataset.overviewStatus;
+      state.directorOverviewStatus = state.directorOverviewStatus === status ? "todos" : status;
+      renderDirectorOverview();
+    });
+  });
+
+  renderDirectorOverviewInsights(rows, formations);
+  renderDirectorOverviewGreChart(rows);
+  renderDirectorOverviewFormationGreChart(rows, formations);
+  renderDirectorOverviewTable(rows, formations);
+}
+
+function renderDirectorOverviewInsights(rows, formations) {
+  const wrap = $("#directorsOverviewInsights");
+  if (!wrap) return;
+  const cards = [];
+
+  const byGre = new Map();
+  rows.forEach((row) => {
+    if (!row.gre) return;
+    if (!byGre.has(row.gre)) byGre.set(row.gre, { total: 0, credenciados: 0 });
+    const item = byGre.get(row.gre);
+    item.total += 1;
+    if (row.credenciado) item.credenciados += 1;
+  });
+  const greEntries = [...byGre.entries()]
+    .map(([gre, d]) => ({ gre, ...d, percent: d.total ? Math.round((d.credenciados / d.total) * 100) : 0 }))
+    .filter((e) => e.total >= 3);
+  if (greEntries.length > 1) {
+    const lowest = greEntries.reduce((a, b) => (b.percent < a.percent ? b : a));
+    cards.push({
+      icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 17 6-6 4 4 8-8"/><path d="M17 7h4v4"/></svg>`,
+      cls: lowest.percent < 50 ? "insight-danger" : "insight-wait",
+      title: "GRE que precisa de atenção",
+      text: `${lowest.gre}: ${lowest.credenciados}/${lowest.total} escolas credenciadas (${lowest.percent}%)`,
+    });
+  }
+
+  let nearestDeadline = null;
+  formations.forEach((f) => {
+    const deadline = formationUrgentDeadline(f);
+    if (!deadline || deadline.days < 0) return;
+    if (!nearestDeadline || deadline.days < nearestDeadline.days) nearestDeadline = { ...deadline, formation: f.nome };
+  });
+  if (nearestDeadline) {
+    cards.push({
+      icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+      cls: nearestDeadline.days <= 7 ? "insight-danger" : "insight-primary",
+      title: "Próximo prazo",
+      text: `${nearestDeadline.days === 0 ? "Hoje" : `Em ${nearestDeadline.days} dia${nearestDeadline.days > 1 ? "s" : ""}`}: ${nearestDeadline.label.toLowerCase()} — ${nearestDeadline.formation}`,
+    });
+  }
+
+  const duplicadas = rows.filter((r) => r.duplicado).length;
+  if (duplicadas > 0) {
+    cards.push({
+      icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="8" x="3" y="3" rx="1"/><rect width="8" height="8" x="13" y="13" rx="1"/><path d="M7 11v3a2 2 0 0 0 2 2h3M17 7V4a2 2 0 0 0-2-2h-3"/></svg>`,
+      cls: "insight-wait",
+      title: "Duplicidade de cadastro",
+      text: `${duplicadas} escola${duplicadas > 1 ? "s" : ""} com mais de um representante inscrito no recorte atual`,
+    });
+  }
+
+  wrap.innerHTML = cards.length
+    ? cards.map((c) => `
+      <article class="insight-card ${c.cls}">
+        <div class="insight-icon">${c.icon}</div>
+        <div>
+          <strong>${esc(c.title)}</strong>
+          <span>${esc(c.text)}</span>
+        </div>
+      </article>
+    `).join("")
+    : "";
+}
+
+function syncDirectorOverviewFilters(formations) {
+  const formationSelect = $("#directorsOverviewFormationFilter");
+  if (formationSelect) {
+    formationSelect.innerHTML = [
+      `<option value="todos">Formação: Todas</option>`,
+      ...formations.map((f) => `<option value="${esc(f.id)}">${esc(f.nome)}</option>`),
+    ].join("");
+    formationSelect.value = formations.some((f) => f.id === state.directorOverviewFormationId) ? state.directorOverviewFormationId : "todos";
+    if (formationSelect.value === "todos") state.directorOverviewFormationId = "todos";
+  }
+
+  const greSelect = $("#directorsOverviewGreFilter");
+  if (greSelect) {
+    const allGres = [...new Set(formations.flatMap((f) => getFormationRows(f).map((r) => r.gre).filter(Boolean)))]
+      .sort((a, b) => getGreNumber(a) - getGreNumber(b));
+    greSelect.innerHTML = [
+      `<option value="todos">GRE: Todas</option>`,
+      ...allGres.map((gre) => `<option value="${esc(gre)}">${esc(gre)}</option>`),
+    ].join("");
+    greSelect.value = allGres.includes(state.directorOverviewGre) ? state.directorOverviewGre : "todos";
+    if (greSelect.value === "todos" && state.directorOverviewGre !== "todos") state.directorOverviewGre = "todos";
+  }
+
+  const statusSelect = $("#directorsOverviewStatusFilter");
+  if (statusSelect) statusSelect.value = state.directorOverviewStatus;
+
+  $("#directorsOverviewClearGre")?.classList.toggle("hidden", state.directorOverviewGre === "todos");
+}
+
+function filteredDirectorOverviewRows(formations) {
+  const query = normalize(state.directorOverviewSearch);
+
+  return formations
+    .filter((formation) => state.directorOverviewFormationId === "todos" || formation.id === state.directorOverviewFormationId)
+    .flatMap((formation) => getFormationRows(formation).map((row) => ({
+      ...row,
+      formationId: formation.id,
+      formationName: formation.nome,
+    })))
+    .filter((row) => {
+      const matchesQuery = !query || normalize(`${row.formationName} ${row.gre} ${row.inep} ${row.escola}`).includes(query);
+      const matchesGre = state.directorOverviewGre === "todos" || row.gre === state.directorOverviewGre;
+      const matchesStatus =
+        state.directorOverviewStatus === "todos" ||
+        (state.directorOverviewStatus === "inscritas" && row.inscrito) ||
+        (state.directorOverviewStatus === "nao-inscritas" && !row.inscrito) ||
+        (state.directorOverviewStatus === "credenciadas" && row.credenciado) ||
+        (state.directorOverviewStatus === "nao-credenciadas" && !row.credenciado);
+      return matchesQuery && matchesGre && matchesStatus;
+    });
+}
+
+function renderDirectorOverviewGreChart(rows) {
+  const byGre = new Map();
+  rows.forEach((row) => {
+    if (!byGre.has(row.gre)) byGre.set(row.gre, { gre: row.gre, total: 0, inscritos: 0, credenciados: 0 });
+    const item = byGre.get(row.gre);
+    item.total += 1;
+    if (row.inscrito) item.inscritos += 1;
+    if (row.credenciado) item.credenciados += 1;
+  });
+
+  const entries = [...byGre.values()]
+    .map((item) => ({ ...item, percent: item.total ? Math.round((item.credenciados / item.total) * 100) : 0 }))
+    .sort((a, b) => getGreNumber(a.gre) - getGreNumber(b.gre));
+  const maxPercent = Math.max(100, ...entries.map((e) => e.percent));
+  const ranges = [
+    { label: "90% ou mais", color: "#22c55e", test: (v) => v >= 90 },
+    { label: "50% a 89%", color: "#38bdf8", test: (v) => v >= 50 && v < 90 },
+    { label: "30% a 49%", color: "#f59e0b", test: (v) => v >= 30 && v < 50 },
+    { label: "Abaixo de 30%", color: "#ef4444", test: (v) => v < 30 },
+  ];
+  const rangeFor = (v) => ranges.find((r) => r.test(v)) || ranges.at(-1);
+  const hasSelection = state.directorOverviewGre !== "todos";
+
+  const chart = $("#directorsOverviewBars");
+  chart.classList.toggle("has-selection", hasSelection);
+  chart.innerHTML = entries.length
+    ? entries.map((item) => {
+        const range = rangeFor(item.percent);
+        const fillH = Math.max(4, Math.round((item.percent / maxPercent) * 100));
+        const selected = state.directorOverviewGre === item.gre;
+        return `
+          <button class="goal-bar${selected ? " selected" : ""}" type="button" data-overview-gre="${esc(item.gre)}" title="${esc(`${item.gre}: ${item.credenciados}/${item.total} credenciadas (${item.percent}%)`)}">
+            <span class="goal-fill" style="height:${fillH}%;--bar-color:${range.color};background:${range.color}" data-pct="${item.percent}%">
+              <span class="goal-count">${item.credenciados}/${item.total}</span>
+            </span>
+            <span class="goal-label">${esc(String(item.gre).replace(" GRE", ""))}<small>GRE</small></span>
+          </button>
+        `;
+      }).join("")
+    : `<p class="muted">Nenhum dado no recorte atual.</p>`;
+
+  $$("#directorsOverviewBars [data-overview-gre]").forEach((bar) => {
+    bar.addEventListener("click", () => {
+      const gre = bar.dataset.overviewGre;
+      state.directorOverviewGre = state.directorOverviewGre === gre ? "todos" : gre;
+      renderDirectorOverview();
+    });
+  });
+
+  $("#directorsOverviewLegend").innerHTML = ranges
+    .map((r) => `<span><i style="background:${r.color};border-radius:3px"></i>${r.label}</span>`)
+    .join("");
+
+  const total = rows.length;
+  const credenciados = rows.filter((r) => r.credenciado).length;
+  const percent = total ? Math.round((credenciados / total) * 100) : 0;
+  const range = rangeFor(percent);
+  const pie = $("#directorsOverviewPie");
+  pie.style.background = `conic-gradient(${range.color} 0 ${percent}%, rgba(255,255,255,0.08) ${percent}% 100%)`;
+  pie.innerHTML = `<strong>${percent}%</strong><span>${credenciados.toLocaleString("pt-BR")}<br>credenciadas</span>`;
+}
+
+const FORMATION_NEON_COLORS = ["#38bdf8", "#a855f7", "#4ade80", "#facc15", "#f472b6", "#fb923c", "#22d3ee", "#f87171"];
+
+const HEATMAP_COLOR_STOPS = [
+  { p: 0, c: [124, 58, 237] },
+  { p: 33, c: [59, 130, 246] },
+  { p: 67, c: [6, 182, 212] },
+  { p: 100, c: [34, 197, 94] },
+];
+
+function heatmapColor(percent) {
+  const v = Math.max(0, Math.min(100, percent));
+  let lo = HEATMAP_COLOR_STOPS[0];
+  let hi = HEATMAP_COLOR_STOPS[HEATMAP_COLOR_STOPS.length - 1];
+  for (let i = 0; i < HEATMAP_COLOR_STOPS.length - 1; i++) {
+    if (v >= HEATMAP_COLOR_STOPS[i].p && v <= HEATMAP_COLOR_STOPS[i + 1].p) {
+      lo = HEATMAP_COLOR_STOPS[i];
+      hi = HEATMAP_COLOR_STOPS[i + 1];
+      break;
+    }
+  }
+  const t = hi.p === lo.p ? 0 : (v - lo.p) / (hi.p - lo.p);
+  const r = Math.round(lo.c[0] + (hi.c[0] - lo.c[0]) * t);
+  const g = Math.round(lo.c[1] + (hi.c[1] - lo.c[1]) * t);
+  const b = Math.round(lo.c[2] + (hi.c[2] - lo.c[2]) * t);
+  return `rgb(${r},${g},${b})`;
+}
+
+function renderDirectorOverviewFormationGreChart(rows, formations) {
+  const table = $("#directorsOverviewFormationGreHeatmap");
+  const legend = $("#directorsOverviewFormationGreLegend");
+  if (!table || !legend) return;
+
+  const mode = state.directorOverviewFormationGreMode;
+  const isNao = mode === "nao-credenciadas";
+  const title = $("#directorsOverviewFormationGreTitle");
+  const subtitle = $("#directorsOverviewFormationGreSubtitle");
+  if (title) title.textContent = isNao ? "Não credenciadas por formação e GRE" : "Credenciadas por formação e GRE";
+  if (subtitle) subtitle.textContent = isNao
+    ? "Percentual de escolas não credenciadas por formação em cada GRE"
+    : "Percentual de escolas credenciadas por formação em cada GRE";
+  $$("#directorsOverviewFormationGreToggle [data-formation-gre-mode]").forEach((b) => {
+    b.classList.toggle("active", b.dataset.formationGreMode === mode);
+  });
+
+  const formationColor = new Map(formations.map((f, i) => [f.id, FORMATION_NEON_COLORS[i % FORMATION_NEON_COLORS.length]]));
+  const formationsInView = formations.filter((f) => rows.some((r) => r.formationId === f.id));
+
+  const key = (gre, formationId) => `${gre}__${formationId}`;
+  const stats = new Map();
+  rows.forEach((row) => {
+    if (!row.gre) return;
+    const k = key(row.gre, row.formationId);
+    if (!stats.has(k)) stats.set(k, { total: 0, credenciados: 0 });
+    const item = stats.get(k);
+    item.total += 1;
+    if (row.credenciado) item.credenciados += 1;
+  });
+
+  const gres = [...new Set(rows.map((r) => r.gre).filter(Boolean))].sort((a, b) => getGreNumber(a) - getGreNumber(b));
+
+  if (!gres.length || !formationsInView.length) {
+    table.innerHTML = "";
+    legend.innerHTML = `<p class="muted">Nenhum dado no recorte atual.</p>`;
+    return;
+  }
+
+  const theadCols = gres.map((gre) => `<th>${esc(String(gre).replace(" GRE", ""))}</th>`).join("");
+  const bodyRows = formationsInView.map((f) => {
+    const dot = formationColor.get(f.id);
+    const tds = gres.map((gre) => {
+      const item = stats.get(key(gre, f.id)) || { total: 0, credenciados: 0 };
+      const credPercent = item.total ? Math.round((item.credenciados / item.total) * 100) : 0;
+      const percent = isNao ? 100 - credPercent : credPercent;
+      const count = isNao ? item.total - item.credenciados : item.credenciados;
+      return `<td style="background:${heatmapColor(percent)}" title="${esc(`${f.nome} · ${gre}: ${count}/${item.total} (${percent}%)`)}">${percent}%</td>`;
+    }).join("");
+    return `
+      <tr>
+        <th class="heatmap-row-label"><span class="heatmap-row-label-inner"><i style="background:${dot}"></i>${esc(f.nome)}</span></th>
+        ${tds}
+      </tr>
+    `;
+  }).join("");
+
+  table.innerHTML = `
+    <thead><tr><th class="heatmap-corner">GRE</th>${theadCols}</tr></thead>
+    <tbody>${bodyRows}</tbody>
+  `;
+
+  legend.innerHTML = `
+    <div class="heatmap-legend-label">Escala de intensidade<small>% de ${isNao ? "não credenciadas" : "credenciadas"}</small></div>
+    <div class="heatmap-legend-bar">
+      <div class="heatmap-legend-gradient"></div>
+      <div class="heatmap-legend-ticks"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></div>
+    </div>
+  `;
+}
+
+function renderDirectorOverviewTable(rows, formations) {
+  const byFormation = new Map(formations.map((f) => [f.id, { formation: f, total: 0, inscritos: 0, credenciados: 0 }]));
+  rows.forEach((row) => {
+    if (!byFormation.has(row.formationId)) byFormation.set(row.formationId, { formation: { id: row.formationId, nome: row.formationName }, total: 0, inscritos: 0, credenciados: 0 });
+    const item = byFormation.get(row.formationId);
+    item.total += 1;
+    if (row.inscrito) item.inscritos += 1;
+    if (row.credenciado) item.credenciados += 1;
+  });
+
+  const colorFor = (v) => (v >= 90 ? "#22c55e" : v >= 50 ? "#38bdf8" : v >= 30 ? "#f59e0b" : "#ef4444");
+  const entries = [...byFormation.values()].filter((item) => item.total > 0).sort((a, b) => b.total - a.total);
+  $("#directorsOverviewTable").innerHTML = entries.length
+    ? entries.map((item) => {
+        const pI = item.total ? Math.round((item.inscritos / item.total) * 100) : 0;
+        const pC = item.total ? Math.round((item.credenciados / item.total) * 100) : 0;
+        const deadline = formationUrgentDeadline(item.formation);
+        const deadlineHtml = deadline
+          ? `<span class="countdown-badge ${deadline.days < 0 ? "expired" : deadline.days <= 7 ? "urgent" : ""}">${deadline.days < 0 ? "Encerrado" : deadline.days === 0 ? "Hoje" : `${deadline.days}d`} · ${esc(deadline.label)}</span>`
+          : `<span class="muted">—</span>`;
+        return `
+          <tr data-overview-formation-row="${esc(item.formation.id)}" tabindex="0">
+            <td><strong>${esc(item.formation.nome)}</strong><small class="row-subtext">${item.total.toLocaleString("pt-BR")} escolas</small></td>
+            <td>${item.total.toLocaleString("pt-BR")}</td>
+            <td><div class="pct-bar-wrap"><div class="pct-bar-track"><div class="pct-bar-fill" style="width:${Math.min(100, pI)}%;background:${colorFor(pI)}"></div></div><span class="pct-bar-label" style="color:${colorFor(pI)}">${item.inscritos}/${item.total} · ${pI}%</span></div></td>
+            <td><div class="pct-bar-wrap"><div class="pct-bar-track"><div class="pct-bar-fill" style="width:${Math.min(100, pC)}%;background:${colorFor(pC)}"></div></div><span class="pct-bar-label" style="color:${colorFor(pC)}">${item.credenciados}/${item.total} · ${pC}%</span></div></td>
+            <td>${deadlineHtml}</td>
+          </tr>
+        `;
+      }).join("")
+    : `<tr><td colspan="5">Nenhuma formação encontrada no recorte atual.</td></tr>`;
+
+  $$("#directorsOverviewTable [data-overview-formation-row]").forEach((row) => {
+    row.addEventListener("click", () => {
+      state.selectedFormationId = row.dataset.overviewFormationRow;
+      render();
+    });
+  });
+}
+
 
 function renderFormationCards() {
   if (state.formationMode !== "directors") return;
   const isAdmin = hasAdminAccess();
-  $("#formationCards").innerHTML = state.formations
-    .filter((f) => f.id && f.nome && !normalize(f.publico || "").includes("professor"))
+  $("#formationCards").innerHTML = directorFormations()
     .map((formation) => {
       const formationRows = getFormationRows(formation);
       const s = summarizeFormation(formation);
@@ -2308,23 +2795,20 @@ function renderFormationDetail() {
     credenciadas: credenciados,
     "nao-credenciadas": naoCredenciados,
   };
-  const helperFor = (key) => {
-    if (key === "total") return "recorte atual";
-    const v = metricValues[key];
-    const t = allRows.length;
-    return `${pct(v, t)} do total`;
-  };
+  const total = allRows.length;
 
-  $("#formationMetrics").innerHTML = METRIC_CONFIGS.map(
-    (cfg) => `
+  $("#formationMetrics").innerHTML = METRIC_CONFIGS.map((cfg) => {
+    const value = metricValues[cfg.key];
+    const isTotal = cfg.key === "total";
+    return `
       <article class="metric ${cfg.cls}">
         <div class="metric-icon">${cfg.icon}</div>
         <span>${cfg.label}</span>
-        <strong>${Number(metricValues[cfg.key]).toLocaleString("pt-BR")}</strong>
-        <small>${helperFor(cfg.key)}</small>
+        <strong>${isTotal ? Number(value).toLocaleString("pt-BR") : pct(value, total)}</strong>
+        <small>${isTotal ? "recorte atual" : `${Number(value).toLocaleString("pt-BR")} de ${total.toLocaleString("pt-BR")} escolas`}</small>
       </article>
-    `,
-  ).join("");
+    `;
+  }).join("");
 
   $("#goalPanel").classList.toggle("hidden", !isAdmin);
   $("#regionalInsights").classList.toggle("hidden", isAdmin);
@@ -2359,32 +2843,6 @@ function renderFormationDetail() {
         const rep = row.representantes[0];
         const inep = String(row.inep);
         const checked = sel.has(inep) ? "checked" : "";
-        const resCls = (v) => v === "deferido" ? "res-ok" : v === "indeferido" ? "res-no" : v === "pendente" ? "res-pend" : "";
-        const resLabel = (v) => v === "deferido" ? "Deferido" : v === "indeferido" ? "Indeferido" : v === "pendente" ? "Pendente" : "—";
-        const resOpts = (f) => [["pendente","Pendente"],["deferido","Deferido"],["indeferido","Indeferido"]]
-          .map(([v,l]) => `<option value="${v}"${row[f]===v?" selected":""}>${l}</option>`).join("");
-
-        const recursoCell = (tipo) => {
-          const f = `recurso_${tipo}`;
-          const ativo = row[f] === "realizado";
-          if (!isAdmin) return `<label class="toggle-switch" title="${ativo ? "Recurso sinalizado" : "Sinalizar recurso"}">
-              <input type="checkbox" class="rec-toggle" data-field="${f}" data-inep="${inep}" ${ativo ? "checked" : ""}/>
-              <span class="toggle-track"></span></label>`;
-          return ativo
-            ? `<span class="resultado-badge" style="background:rgba(124,58,237,0.18);color:var(--primary-2)">Realizado</span>`
-            : `<span style="color:var(--muted);font-size:0.78rem">—</span>`;
-        };
-
-        const resultadoCell = (tipo) => {
-          const f = `resultado_${tipo}`;
-          const val = row[f];
-          const cls = resCls(val);
-          if (isAdmin && val) return `<select class="table-select ${cls}" data-field="${f}" data-inep="${inep}">${resOpts(f)}</select>`;
-          if (isAdmin) return `<span style="color:var(--muted);font-size:0.78rem">—</span>`;
-          return val ? `<span class="resultado-badge ${cls}">${resLabel(val)}</span>`
-                     : `<span style="color:var(--muted);font-size:0.78rem">—</span>`;
-        };
-
         return `
           <tr class="${sel.has(inep) ? "row-selected" : ""}">
             <td class="td-check"><input type="checkbox" class="row-check" data-inep="${inep}" ${checked}/></td>
@@ -2393,15 +2851,11 @@ function renderFormationDetail() {
             <td><strong>${esc(row.escola)}</strong></td>
             <td>${statusPill(row.inscrito, "Sim", "Não")}</td>
             <td>${statusPill(row.credenciado, "Sim", row.inscrito ? "Pendente" : "Não")}</td>
-            <td class="td-toggle">${recursoCell("inscricao")}</td>
-            <td>${resultadoCell("inscricao")}</td>
-            <td class="td-toggle">${recursoCell("credenciamento")}</td>
-            <td>${resultadoCell("credenciamento")}</td>
             <td>${rep ? `${esc(rep.nome)}<br><small style="color:var(--muted)">${esc(rep.matricula||"")}</small>` : `<span style="color:var(--muted);font-size:0.82rem">Não informado</span>`}</td>
             <td><button class="mini-button" data-inep="${inep}">Abrir</button></td>
           </tr>`;
       }).join("")
-    : `<tr><td colspan="12" style="text-align:center;color:var(--muted);padding:32px">Nenhuma escola encontrada com os filtros aplicados.</td></tr>`;
+    : `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:32px">Nenhuma escola encontrada com os filtros aplicados.</td></tr>`;
   renderPagination("#schoolsTablePagination", "schoolsTablePage", rows.length, renderFormationDetail);
 
   const selectAllEl = $("#selectAllCheck");
@@ -2418,14 +2872,6 @@ function renderFormationDetail() {
       if (selectAllEl) selectAllEl.checked = allNowSelected;
       updateSelectionBar();
     });
-  });
-
-  $$("#schoolsTable .rec-toggle").forEach((tog) => {
-    tog.addEventListener("change", () => updateSchoolField(tog.dataset.inep, tog.dataset.field, tog.checked ? "realizado" : ""));
-  });
-
-  $$("#schoolsTable .table-select").forEach((sel) => {
-    sel.addEventListener("change", () => updateSchoolField(sel.dataset.inep, sel.dataset.field, sel.value));
   });
 
   $$("#schoolsTable [data-inep]").forEach((b) => {
@@ -2547,27 +2993,9 @@ function scheduleResourceAutoSave() {
   _autoSaveTimer = setTimeout(() => saveFormationChanges(), 1000);
 }
 
-function updateSchoolField(inep, field, value) {
-  const formation = getFormation();
-  if (!formation) return;
-  if (!formation.recursoMap) formation.recursoMap = new Map();
-  const rec = formation.recursoMap.get(inep) || {};
-  rec[field] = value;
-  if (field === "recurso_inscricao") rec.resultado_inscricao = value === "realizado" ? "pendente" : "";
-  if (field === "recurso_credenciamento") rec.resultado_credenciamento = value === "realizado" ? "pendente" : "";
-  rec.formacao_id = formation.id;
-  rec.inep = inep;
-  formation.recursoMap.set(inep, rec);
-  state.dirtyRecursos.add(inep);
-  state.unsavedChanges = true;
-  renderFormationDetail();
-  // Auto-save após 1 segundo sem novas alterações
-  clearTimeout(_autoSaveTimer);
-  _autoSaveTimer = setTimeout(() => saveFormationChanges(), 1000);
-}
-
 async function reloadAllFormations() {
   const btn = $("#reloadFormationsBtn");
+  const originalHtml = btn?.innerHTML;
   if (btn) { btn.disabled = true; btn.textContent = "Atualizando..."; }
   try {
     state.formations = await loadFormations();
@@ -2576,41 +3004,37 @@ async function reloadAllFormations() {
   } catch (err) {
     notify("Erro ao atualizar", err.message || "Verifique a conexão.", "error");
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = "Atualizar dados"; }
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = originalHtml || "Atualizar dados";
+    }
   }
 }
 
-async function reloadRecursoMap() {
-  const formation = getFormation();
-  if (!formation) return;
-  if (!db) {
-    notify("Sem conexão", "Não foi possível atualizar os recursos sem acesso ao banco.", "error");
-    return;
-  }
-  if (state.unsavedChanges && state.dirtyRecursos?.size) {
-    notify("Salve as alterações primeiro", "Há recursos pendentes nesta tela. Salve antes de atualizar do banco.", "warning");
-    return;
-  }
-  const btn = $("#reloadRecursoBtn");
+async function reloadTeacherData() {
+  const btn = $("#reloadTeacherListBtn");
+  const originalHtml = btn?.innerHTML;
   if (btn) { btn.disabled = true; btn.textContent = "Atualizando..."; }
   try {
-    const data = await selectAllDbRows("escola_recurso", "*", (query) =>
-      query.eq("formacao_id", formation.id).order("inep", { ascending: true }),
-    );
-    state.recursoTableMissing = false;
-    formation.recursoMap = new Map((data || []).map((r) => [r.inep, r]));
-    renderFormationDetail();
-    notify("Dados atualizados", "Recursos e resultados recarregados do banco.");
+    state.formations = await loadFormations();
+    state.courses = await loadCourses();
+    const teacherFormationIds = state.formations
+      .filter((f) => f.id && normalize(f.publico || "").includes("professor"))
+      .map((f) => f.id);
+    state.teacherRows = await loadTeacherRowsForFormations(teacherFormationIds);
+    render();
+    renderTeacherListCards();
+    renderCoursesList();
+    renderTeacherDashboard();
+    renderTeachersArea();
+    notify("Atualizado", "Dados de professores recarregados.", "success");
   } catch (err) {
-    if (isMissingTableError(err)) {
-      state.recursoTableMissing = true;
-      renderFormationDetail();
-      notify("Tabela de recursos ausente", "Execute o SQL de migração no Supabase para ativar recursos e resultados.", "error");
-    } else {
-      notify("Erro ao atualizar", err.message, "error");
-    }
+    notify("Erro ao atualizar", err.message || "Verifique a conexão.", "error");
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = "Atualizar recursos"; }
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = originalHtml || "Atualizar dados";
+    }
   }
 }
 
@@ -3488,12 +3912,16 @@ function getTeacherSchoolRows() {
         esperado: school?.professores || 0,
         total: 0,
         concluidos: 0,
+        emAndamento: 0,
+        naoIniciados: 0,
         somaMedia: 0,
       });
     }
     const entry = byInep.get(r.inep);
     entry.total++;
     if (r.resultado === "Concluído") entry.concluidos++;
+    else if (r.resultado === "Em andamento") entry.emAndamento++;
+    else entry.naoIniciados++;
     entry.somaMedia += r.media || 0;
   });
 
@@ -3504,6 +3932,8 @@ function getTeacherSchoolRows() {
     esperado: e.esperado,
     total: e.total,
     concluidos: e.concluidos,
+    emAndamento: e.emAndamento,
+    naoIniciados: e.naoIniciados,
     mediaEscola: e.total > 0 ? Math.round((e.somaMedia / e.total) * 10) / 10 : 0,
     pct: e.total > 0 ? Math.round((e.concluidos / e.total) * 100) : 0,
   }));
@@ -3537,7 +3967,8 @@ function filteredTeacherSchoolRows() {
   return schools.filter((s) => {
     if (greF !== "todos" && s.gre !== greF) return false;
     if (concF === "Concluído" && s.concluidos === 0) return false;
-    if (concF === "Não iniciado" && s.concluidos > 0) return false;
+    if (concF === "Em andamento" && s.emAndamento === 0) return false;
+    if (concF === "Não iniciado" && s.naoIniciados === 0) return false;
     if (q) {
       const text = normalize(`${s.gre} ${s.inep} ${s.escola}`);
       if (!text.includes(q)) return false;
@@ -3839,14 +4270,15 @@ function renderCoursesList() {
     });
   const iconClock = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
 
+  const userGre = state.user?.gre;
   container.innerHTML = courses.map((c) => {
-    const rows = state.teacherRows.filter((r) => r.cursoId === c.id);
+    const rows = state.teacherRows.filter((r) => r.cursoId === c.id && (isAdmin || !userGre || r.gre === userGre));
     const naplanilha = rows.length;
     const concluidos = rows.filter((r) => r.resultado === "Concluído").length;
     const pct = naplanilha > 0 ? Math.round((concluidos / naplanilha) * 100) : 0;
-    const importedCount = Math.max(Number(c.importedCount || 0), naplanilha);
+    const importedCount = isAdmin ? Math.max(Number(c.importedCount || 0), naplanilha) : naplanilha;
     const importInfo = importedCount
-      ? `<small>Base inserida: ${importedCount.toLocaleString("pt-BR")} registros</small>${c.lastImportedAt ? `<small class="event-updated">Atualizado em ${esc(formatDateTime(c.lastImportedAt))}</small>` : ""}`
+      ? `<small>${isAdmin ? "Base inserida" : "Registros da sua GRE"}: ${importedCount.toLocaleString("pt-BR")} registros</small>${isAdmin && c.lastImportedAt ? `<small class="event-updated">Atualizado em ${esc(formatDateTime(c.lastImportedAt))}</small>` : ""}`
       : `<small>Sem dados importados</small>`;
     const courseFormation = state.formations.find((f) => f.id === c.formacaoId);
     const cargaTag = c.cargaHoraria ? `<span class="formation-tag">${iconClock}${esc(c.cargaHoraria)}</span>` : "";
@@ -4114,15 +4546,6 @@ function renderTeachersArea() {
 
   const isAdmin = hasAdminAccess();
   const strictAdmin = state.user?.perfil === "admin";
-  // Header stays at formation level; the course is selected in the filter.
-  const headerNameEl = $("#teacherFormationName");
-  if (headerNameEl) {
-    const selectedFormationIds = getTeacherSelectedFormationIds();
-    const formation = state.formations.find((f) => f.id === selectedFormationIds[0]);
-    headerNameEl.textContent = selectedFormationIds.length === 1
-      ? (formation?.nome || "Formação de Professores 2026")
-      : "Relatório de formações";
-  }
   const schoolRows = getTeacherSchoolRows();
   const selectedGre = isAdmin ? state.teachersGreFilter : state.user?.gre;
   const allPersonRows = (() => {
@@ -4177,25 +4600,11 @@ function renderTeachersArea() {
     const insightEl = $("#teacherRegionalInsight");
     if (insightEl) {
       insightEl.classList.remove("hidden");
-      const pct = pctGeral;
-      const gauge = $("#teacherRegionalGauge");
-      if (gauge) {
-        const ranges = [
-          { color: "#22c55e", test: (v) => v >= 90 },
-          { color: "#38bdf8", test: (v) => v >= 50 },
-          { color: "#f59e0b", test: (v) => v >= 30 },
-          { color: "#ef4444", test: () => true },
-        ];
-        const color = (ranges.find((r) => r.test(pct)) || ranges.at(-1)).color;
-        gauge.style.background = `conic-gradient(${color} 0 ${pct}%, rgba(255,255,255,0.08) ${pct}% 100%)`;
-        gauge.style.setProperty("--pie-glow", `${color}70`);
-        gauge.style.setProperty("--pie-glow-far", `${color}28`);
-      }
-      if ($("#teacherRegionalPercent")) $("#teacherRegionalPercent").textContent = `${pct}%`;
-      if ($("#teacherRegionalSummary")) $("#teacherRegionalSummary").textContent = `${totalConcluidos.toLocaleString("pt-BR")} de ${totalInscritos.toLocaleString("pt-BR")} professores concluíram`;
-      if ($("#teacherRegionalHint")) $("#teacherRegionalHint").textContent = pct >= 100 ? "Todos os professores concluíram!" : `${(totalInscritos - totalConcluidos).toLocaleString("pt-BR")} professores ainda não concluíram.`;
-      if ($("#teacherRegionalDoneLabel")) $("#teacherRegionalDoneLabel").textContent = `Concluídos ${totalConcluidos.toLocaleString("pt-BR")}`;
-      if ($("#teacherRegionalPendingLabel")) $("#teacherRegionalPendingLabel").textContent = `Pendentes ${(totalInscritos - totalConcluidos).toLocaleString("pt-BR")}`;
+      state._teacherRegionalPersonStats = { pct: pctGeral, concluidos: totalConcluidos, total: totalInscritos };
+      renderTeacherRegionalGauge(schoolRows);
+
+      state._teacherPersonStatusCounts = { concluidos: totalConcluidos, emAndamento: totalEmAndamento, naoIniciados: totalNaoIniciados };
+      renderTeacherStatusChart(state._teacherPersonStatusCounts);
     }
   }
 
@@ -4213,6 +4622,123 @@ function renderTeachersArea() {
 
   // Table
   renderTeachersTable();
+}
+
+function niceScaleMax(value) {
+  if (value <= 10) return 10;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(value)));
+  const residual = value / magnitude;
+  let niceResidual;
+  if (residual <= 1) niceResidual = 1;
+  else if (residual <= 2) niceResidual = 2;
+  else if (residual <= 2.5) niceResidual = 2.5;
+  else if (residual <= 5) niceResidual = 5;
+  else niceResidual = 10;
+  return niceResidual * magnitude;
+}
+
+const STATUS_SEGMENT_COLORS = [
+  { key: "Não iniciado", label: "Não iniciado", color: "#f43f5e" },
+  { key: "Em andamento", label: "Em andamento", color: "#f59e0b" },
+  { key: "Concluído", label: "Concluído", color: "#10b981" },
+];
+
+function renderTeacherRegionalGauge(schoolRows) {
+  $$("#teacherRegionalGaugeToggle [data-regional-gauge-view]").forEach((b) => b.classList.toggle("active", b.dataset.regionalGaugeView === state.teacherRegionalGaugeView));
+
+  const titleEl = $("#teacherRegionalGaugeTitle");
+  const personStats = state._teacherRegionalPersonStats || { pct: 0, concluidos: 0, total: 0 };
+
+  let pct, summaryText, hintText, doneLabel, pendingLabel;
+  if (state.teacherRegionalGaugeView === "escola") {
+    const schoolsWithData = schoolRows.filter((s) => s.total > 0);
+    const schoolsDone = schoolsWithData.filter((s) => s.concluidos === s.total).length;
+    const totalSchools = schoolsWithData.length;
+    const pendingSchools = totalSchools - schoolsDone;
+    pct = totalSchools > 0 ? Math.round((schoolsDone / totalSchools) * 100) : 0;
+    if (titleEl) titleEl.textContent = "Escolas 100% concluídas";
+    summaryText = `${schoolsDone.toLocaleString("pt-BR")} de ${totalSchools.toLocaleString("pt-BR")} escolas concluíram 100%`;
+    hintText = totalSchools > 0 && pendingSchools === 0 ? "Todas as escolas concluíram 100%!" : `${pendingSchools.toLocaleString("pt-BR")} escolas ainda não concluíram 100%.`;
+    doneLabel = `Concluídas ${schoolsDone.toLocaleString("pt-BR")}`;
+    pendingLabel = `Pendentes ${pendingSchools.toLocaleString("pt-BR")}`;
+  } else {
+    pct = personStats.pct;
+    if (titleEl) titleEl.textContent = "Progresso de conclusão";
+    summaryText = `${personStats.concluidos.toLocaleString("pt-BR")} de ${personStats.total.toLocaleString("pt-BR")} professores concluíram`;
+    hintText = pct >= 100 ? "Todos os professores concluíram!" : `${(personStats.total - personStats.concluidos).toLocaleString("pt-BR")} professores ainda não concluíram.`;
+    doneLabel = `Concluídos ${personStats.concluidos.toLocaleString("pt-BR")}`;
+    pendingLabel = `Pendentes ${(personStats.total - personStats.concluidos).toLocaleString("pt-BR")}`;
+  }
+
+  const gauge = $("#teacherRegionalGauge");
+  if (gauge) {
+    const ranges = [
+      { color: "#22c55e", test: (v) => v >= 90 },
+      { color: "#38bdf8", test: (v) => v >= 50 },
+      { color: "#f59e0b", test: (v) => v >= 30 },
+      { color: "#ef4444", test: () => true },
+    ];
+    const color = (ranges.find((r) => r.test(pct)) || ranges.at(-1)).color;
+    gauge.style.background = `conic-gradient(${color} 0 ${pct}%, rgba(255,255,255,0.08) ${pct}% 100%)`;
+    gauge.style.setProperty("--pie-glow", `${color}70`);
+    gauge.style.setProperty("--pie-glow-far", `${color}28`);
+  }
+  if ($("#teacherRegionalPercent")) $("#teacherRegionalPercent").textContent = `${pct}%`;
+  if ($("#teacherRegionalSummary")) $("#teacherRegionalSummary").textContent = summaryText;
+  if ($("#teacherRegionalHint")) $("#teacherRegionalHint").textContent = hintText;
+  if ($("#teacherRegionalDoneLabel")) $("#teacherRegionalDoneLabel").textContent = doneLabel;
+  if ($("#teacherRegionalPendingLabel")) $("#teacherRegionalPendingLabel").textContent = pendingLabel;
+}
+
+function renderTeacherStatusChart(personCounts) {
+  const plotEl = $("#teacherStatusBarPlot");
+  const legendEl = $("#teacherStatusBarLegend");
+  if (!plotEl || !legendEl) return;
+
+  const activeFilter = state.teachersConclusaoFilter;
+  const total = personCounts.concluidos + personCounts.emAndamento + personCounts.naoIniciados;
+  const segments = STATUS_SEGMENT_COLORS.map((seg) => ({ ...seg, value: seg.key === "Não iniciado" ? personCounts.naoIniciados : seg.key === "Em andamento" ? personCounts.emAndamento : personCounts.concluidos }));
+
+  const niceMax = niceScaleMax(Math.max(1, ...segments.map((s) => s.value)));
+  const tickCount = 5;
+  const step = niceMax / tickCount;
+  const tickValues = Array.from({ length: tickCount + 1 }, (_, i) => Math.round(step * (tickCount - i)));
+
+  plotEl.innerHTML = `
+    <div class="status-bar-grid">
+      ${tickValues.map((v) => `<div class="status-bar-gridline"><span>${v.toLocaleString("pt-BR")}</span></div>`).join("")}
+    </div>
+    <div class="status-bar-bars">
+      ${segments.map((seg) => {
+        const pct = total > 0 ? Math.round((seg.value / total) * 100) : 0;
+        const h = seg.value > 0 ? Math.max(2, Math.round((seg.value / niceMax) * 100)) : 0;
+        const active = activeFilter === seg.key;
+        return `
+          <button type="button" class="status-bar-col${active ? " active" : ""}" data-status-pie-filter="${esc(seg.key)}" title="Filtrar tabela por ${esc(seg.label)}">
+            <span class="status-bar-value">${seg.value.toLocaleString("pt-BR")}<small>(${pct}%)</small></span>
+            <span class="status-bar-fill" style="height:${h}%;background:${seg.color};--bar-glow:${seg.color}80"></span>
+          </button>
+        `;
+      }).join("")}
+    </div>
+  `;
+
+  legendEl.innerHTML = segments.map((seg) => `
+    <span class="status-bar-legend-item"><i style="background:${seg.color}"></i>${esc(seg.label)}</span>
+  `).join("");
+
+  plotEl.querySelectorAll("[data-status-pie-filter]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const status = btn.dataset.statusPieFilter;
+      state.teachersConclusaoFilter = state.teachersConclusaoFilter === status ? "todos" : status;
+      state.teachersView = "detail";
+      state.teacherTablePage = 1;
+      const select = $("#teacherConclusaoFilter");
+      if (select) select.value = state.teachersConclusaoFilter;
+      withContentLoader(() => renderTeachersArea());
+      $("#teacherTableEl")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+  });
 }
 
 function reportFilterOption({ type, value, label, checked, count = "" }) {
@@ -4289,8 +4815,8 @@ function renderTeacherReportCourses() {
     <div class="report-filter-panel panel">
       <div class="report-filter-head">
         <div>
-          <p class="eyebrow">Filtros</p>
-          <h3>Recorte do relatório</h3>
+          <p class="eyebrow">Visão geral</p>
+          <h3>Dashboard de formações de professores</h3>
         </div>
       </div>
       <div class="report-filter-toolbar">
@@ -4474,12 +5000,41 @@ function renderTeachersTable() {
     const map = { "Concluído": "ok", "Em andamento": "wait", "Não iniciado": "no" };
     return `<span class="pill ${map[res] || "no"}">${esc(res || "Não iniciado")}</span>`;
   };
+  const sortArrow = (key, sortKeyState, sortDirState) => {
+    const active = sortKeyState === key;
+    return `<svg class="sort-arrow${active ? " active" : ""}${active && sortDirState === "desc" ? " desc" : ""}" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`;
+  };
+  const sortTh = (label, key, extraClass = "") => `<th class="sortable-th ${extraClass}" data-sort-key="${key}">${esc(label)}${sortArrow(key, state.teacherSortKey, state.teacherSortDir)}</th>`;
+  const sortThPerson = (label, key, extraClass = "") => `<th class="sortable-th ${extraClass}" data-person-sort-key="${key}">${esc(label)}${sortArrow(key, state.teacherPersonSortKey, state.teacherPersonSortDir)}</th>`;
 
   const strictAdmin = state.user?.perfil === "admin";
   const colgroupEl = $("#teacherColgroup");
 
   if (state.teachersView === "school") {
     const rows = filteredTeacherSchoolRows();
+    if (state.teacherSortKey) {
+      const sortValue = (s, key) => {
+        switch (key) {
+          case "gre": return getGreNumber(s.gre);
+          case "inep": return s.inep;
+          case "escola": return normalize(s.escola);
+          case "esperado": return s.esperado;
+          case "total": return s.total;
+          case "naoIniciados": return s.naoIniciados;
+          case "emAndamento": return s.emAndamento;
+          case "concluidos": return s.concluidos;
+          case "pct": return s.pct;
+          default: return 0;
+        }
+      };
+      const dirMul = state.teacherSortDir === "desc" ? -1 : 1;
+      rows.sort((a, b) => {
+        const va = sortValue(a, state.teacherSortKey);
+        const vb = sortValue(b, state.teacherSortKey);
+        if (typeof va === "string" || typeof vb === "string") return String(va).localeCompare(String(vb)) * dirMul;
+        return (va - vb) * dirMul;
+      });
+    }
     const { pageItems } = paginateItems(rows, "teacherTablePage");
     if (titleEl) titleEl.textContent = "Por escola";
     if (countEl) countEl.textContent = `${rows.length} escola${rows.length !== 1 ? "s" : ""}`;
@@ -4487,25 +5042,31 @@ function renderTeachersTable() {
     if (colgroupEl) colgroupEl.innerHTML = strictAdmin ? `
       <col style="width:72px">
       <col style="width:96px">
-      <col style="width:300px">
+      <col style="width:260px">
       <col style="width:88px">
-      <col style="width:100px">
+      <col style="width:88px">
+      <col style="width:110px">
+      <col style="width:110px">
       <col style="width:100px">
       <col style="width:160px">` : `
       <col style="width:72px">
       <col style="width:96px">
-      <col style="width:340px">
-      <col style="width:100px">
+      <col style="width:300px">
+      <col style="width:88px">
+      <col style="width:110px">
+      <col style="width:110px">
       <col style="width:100px">
       <col style="width:160px">`;
 
     headEl.innerHTML = `<tr>
-      <th>GRE</th><th>INEP</th><th>Escola</th>
-      ${strictAdmin ? `<th class="th-num">Esperados</th>` : ""}
-      <th class="th-num">Inscritos</th><th class="th-num">Concluídos</th><th class="th-num">Porcentagem</th>
+      ${sortTh("GRE", "gre")}${sortTh("INEP", "inep")}${sortTh("Escola", "escola")}
+      ${strictAdmin ? sortTh("Esperados", "esperado", "th-num") : ""}
+      ${sortTh("Inscritos", "total", "th-num")}
+      ${sortTh("Não iniciados", "naoIniciados", "th-num")}${sortTh("Em andamento", "emAndamento", "th-num")}${sortTh("Concluídos", "concluidos", "th-num")}
+      ${sortTh("Porcentagem", "pct", "th-num")}
     </tr>`;
 
-    const colspan = strictAdmin ? 7 : 6;
+    const colspan = strictAdmin ? 9 : 8;
     bodyEl.innerHTML = pageItems.map((s) => {
       const color = pctColor(s.pct);
       return `<tr>
@@ -4514,7 +5075,9 @@ function renderTeachersTable() {
         <td class="td-escola"><strong>${esc(s.escola)}</strong></td>
         ${strictAdmin ? `<td class="td-num">${s.esperado.toLocaleString("pt-BR")}</td>` : ""}
         <td class="td-num">${s.total.toLocaleString("pt-BR")}</td>
-        <td class="td-num">${s.concluidos.toLocaleString("pt-BR")}</td>
+        <td class="td-num" style="color:var(--danger);font-weight:800">${s.naoIniciados.toLocaleString("pt-BR")}</td>
+        <td class="td-num" style="color:var(--wait);font-weight:800">${s.emAndamento.toLocaleString("pt-BR")}</td>
+        <td class="td-num" style="color:var(--ok);font-weight:800">${s.concluidos.toLocaleString("pt-BR")}</td>
         <td>
           <div class="pct-bar-wrap">
             <div class="pct-bar-track">
@@ -4529,6 +5092,28 @@ function renderTeachersTable() {
 
   } else {
     const rows = filteredTeacherPersonRows();
+    if (state.teacherPersonSortKey) {
+      const key = state.teacherPersonSortKey;
+      const sortValue = (r) => {
+        switch (key) {
+          case "gre": return getGreNumber(r.gre);
+          case "inep": return r.inep;
+          case "escola": return normalize(r.escola);
+          case "nome": return normalize(r.nome);
+          case "conclusao": return r.conclusao;
+          case "media": return r.media;
+          case "resultado": return normalize(r.resultado);
+          default: return 0;
+        }
+      };
+      const dirMul = state.teacherPersonSortDir === "desc" ? -1 : 1;
+      rows.sort((a, b) => {
+        const va = sortValue(a);
+        const vb = sortValue(b);
+        if (typeof va === "string" || typeof vb === "string") return String(va).localeCompare(String(vb)) * dirMul;
+        return (va - vb) * dirMul;
+      });
+    }
     const { pageItems } = paginateItems(rows, "teacherTablePage");
     if (titleEl) titleEl.textContent = "Por professor";
     if (countEl) countEl.textContent = `${rows.length} professor${rows.length !== 1 ? "es" : ""}`;
@@ -4543,7 +5128,8 @@ function renderTeachersTable() {
       <col style="width:130px">`;
 
     headEl.innerHTML = `<tr>
-      <th>GRE</th><th>INEP</th><th>Escola</th><th>Nome</th><th class="th-num">Conclusão</th><th class="th-num">Média</th><th>Resultado</th>
+      ${sortThPerson("GRE", "gre")}${sortThPerson("INEP", "inep")}${sortThPerson("Escola", "escola")}${sortThPerson("Nome", "nome")}
+      ${sortThPerson("Conclusão", "conclusao", "th-num")}${sortThPerson("Média", "media", "th-num")}${sortThPerson("Resultado", "resultado")}
     </tr>`;
 
     bodyEl.innerHTML = pageItems.map((r) => {

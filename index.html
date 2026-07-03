@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=26" />
+    <link rel="stylesheet" href="styles.css?v=61" />
   </head>
   <body>
     <!-- LOADER -->
@@ -137,18 +137,20 @@
             </div>
           </div>
 
-          <div class="sidebar-user" id="sidebarUser"></div>
-
           <nav class="sidebar-nav">
             <span class="nav-group-label admin-only">Principal</span>
             <button class="nav-item admin-only" data-tab="home">
               <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
               Início
             </button>
-            <span class="nav-group-label">Monitoramento</span>
-            <button class="nav-item active" data-tab="formation">
+            <span class="nav-group-label">Formações</span>
+            <button class="nav-item active" data-tab="formation" data-formation-page="directors">
               <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
-              Formações
+              Diretores
+            </button>
+            <button class="nav-item" data-tab="formation" data-formation-page="teachers">
+              <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              Professores
             </button>
             <span class="nav-group-label strict-admin-only">Administrativo</span>
             <button class="nav-item strict-admin-only" data-tab="users">
@@ -158,6 +160,10 @@
           </nav>
 
           <div class="sidebar-bottom">
+            <div class="sidebar-account">
+              <div class="sidebar-user" id="sidebarUser"></div>
+              <div class="db-status-badge" id="dbStatusBadge"></div>
+            </div>
             <button class="nav-item" data-tab="profile">
               <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
               Meu Perfil
@@ -175,11 +181,47 @@
               <p class="eyebrow" id="profileLabel">Formação</p>
               <h2 id="pageTitle">Acompanhamento de formações</h2>
             </div>
-            <div class="topbar-right-wrap">
-              <div class="db-status-badge" id="dbStatusBadge"></div>
-              <div class="topbar-user-wrap" id="topbarUserWrap"></div>
+            <div class="topbar-actions directors-top-actions hidden" id="directorsTopActions">
+              <button class="secondary" id="directorsOverviewBtn" type="button">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+                Visão geral
+              </button>
+              <button class="secondary" id="directorsFormationsBtn" type="button">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
+                Formações
+              </button>
+              <button class="secondary admin-only" type="button" data-formation-admin-view="form">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+                Cadastrar
+              </button>
+              <button class="secondary" id="reloadFormationsBtn" type="button">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+                Atualizar dados
+              </button>
+            </div>
+            <div class="topbar-actions teachers-top-actions hidden" id="teachersTopActions">
+              <button class="secondary" id="teachersOverviewBtn" type="button">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+                Visão geral
+              </button>
+              <button class="secondary" id="teachersFormationsBtn" type="button">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
+                Formações
+              </button>
+              <button class="secondary" id="teachersCoursesBtn" type="button">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                Cursos
+              </button>
+              <button class="secondary" id="reloadTeacherListBtn" type="button">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+                Atualizar dados
+              </button>
             </div>
           </header>
+
+          <button class="fab-add-btn hidden" id="teachersAddBtn" type="button" title="Cadastrar">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+          </button>
 
           <!-- HOME (admin) -->
           <section class="tab-panel hidden" data-panel="home">
@@ -220,7 +262,7 @@
 
             <!-- LISTA DE FORMAÇÕES DE PROFESSORES -->
             <section class="hidden" id="teachersListArea">
-              <button class="back-button" data-back-home type="button" style="margin-bottom:12px">
+              <button class="back-button hidden" data-back-home type="button" style="margin-bottom:12px">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
                 Voltar
               </button>
@@ -228,26 +270,6 @@
                 <div>
                   <p class="eyebrow">Professores</p>
                   <h3>Formações cadastradas</h3>
-                </div>
-                <div style="display:flex;align-items:center;gap:10px">
-                  <button class="secondary" id="reloadTeacherListBtn" type="button">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
-                    Atualizar dados
-                  </button>
-                  <div class="formation-admin-tabs admin-only" id="teacherAdminTabs">
-                    <button class="secondary active" type="button" id="teacherTabList">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
-                      Formações
-                    </button>
-                    <button class="secondary" type="button" id="addTeacherFormationBtn">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
-                      Cadastrar formação
-                    </button>
-                    <button class="secondary" type="button" id="coursesGlobalBtn">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
-                      Cursos
-                    </button>
-                  </div>
                 </div>
               </div>
               <div class="formation-grid" id="teacherFormationCards"></div>
@@ -343,10 +365,6 @@
 
             <!-- CURSOS DE UMA FORMAÇÃO DE PROFESSORES -->
             <section class="hidden" id="coursesArea">
-              <button class="back-button" id="backToTeachersListBtn" type="button" style="margin-bottom:12px">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-                Voltar
-              </button>
               <div class="section-title row-title" id="coursesListHeader">
                 <div>
                   <p class="eyebrow">Professores</p>
@@ -354,7 +372,6 @@
                 </div>
                 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
                   <button class="secondary" id="dashboardBtn" type="button">Dashboard</button>
-                  <button class="secondary admin-only" id="addCourseBtn" type="button">Cadastrar curso</button>
                 </div>
               </div>
               <div class="formation-grid" id="courseCards"></div>
@@ -481,17 +498,6 @@
             </section>
 
             <section class="hidden" id="teachersArea">
-              <div class="section-title row-title">
-                <div>
-                  <button class="back-button" id="teachersBackBtn" aria-label="Voltar">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-                    Voltar
-                  </button>
-                  <p class="eyebrow" style="margin-top:8px">Professores</p>
-                  <h3 id="teacherFormationName">Formação de Professores 2026</h3>
-                </div>
-              </div>
-
               <div class="teacher-report-courses" id="teacherReportCourses"></div>
               <div class="metrics-grid" id="teacherMetrics"></div>
 
@@ -513,27 +519,46 @@
                 </div>
               </article>
 
-              <article class="panel hidden" id="teacherRegionalInsight">
-                <div class="panel-head compact-head">
-                  <div>
-                    <p class="eyebrow">Minha regional</p>
-                    <h3>Progresso de conclusão</h3>
-                  </div>
-                </div>
-                <div class="credential-focus">
-                  <div class="credential-gauge" id="teacherRegionalGauge">
-                    <span id="teacherRegionalPercent">0%</span>
-                  </div>
-                  <div class="credential-copy">
-                    <strong id="teacherRegionalSummary">0 de 0 professores concluíram</strong>
-                    <p class="hint" id="teacherRegionalHint">Aguardando dados.</p>
-                    <div class="credential-stats">
-                      <span id="teacherRegionalDoneLabel">Concluídos 0</span>
-                      <span id="teacherRegionalPendingLabel">Pendentes 0</span>
+              <div class="regional-insight-row hidden" id="teacherRegionalInsight">
+                <article class="panel">
+                  <div class="panel-head compact-head">
+                    <div>
+                      <p class="eyebrow">Minha regional</p>
+                      <h3 id="teacherRegionalGaugeTitle">Progresso de conclusão</h3>
+                    </div>
+                    <div class="goal-toggle" id="teacherRegionalGaugeToggle">
+                      <button class="secondary active" type="button" data-regional-gauge-view="professor">Professores</button>
+                      <button class="secondary" type="button" data-regional-gauge-view="escola">Escolas</button>
                     </div>
                   </div>
-                </div>
-              </article>
+                  <div class="credential-focus">
+                    <div class="credential-gauge" id="teacherRegionalGauge">
+                      <span id="teacherRegionalPercent">0%</span>
+                    </div>
+                    <div class="credential-copy">
+                      <strong id="teacherRegionalSummary">0 de 0 professores concluíram</strong>
+                      <p class="hint" id="teacherRegionalHint">Aguardando dados.</p>
+                      <div class="credential-stats">
+                        <span id="teacherRegionalDoneLabel">Concluídos 0</span>
+                        <span id="teacherRegionalPendingLabel">Pendentes 0</span>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+                <article class="panel">
+                  <div class="panel-head compact-head">
+                    <div>
+                      <p class="eyebrow">Distribuição</p>
+                      <h3>Situação por professor</h3>
+                    </div>
+                  </div>
+                  <div class="status-bar-chart">
+                    <p class="status-bar-axis-label">Professores</p>
+                    <div class="status-bar-plot" id="teacherStatusBarPlot"></div>
+                    <div class="status-bar-legend" id="teacherStatusBarLegend"></div>
+                  </div>
+                </article>
+              </div>
 
               <article class="panel filters-panel">
                 <div class="panel-head">
@@ -544,8 +569,8 @@
                   </div>
                   <div style="display:flex;align-items:center;gap:10px">
                     <div class="goal-toggle" id="teacherViewToggle">
-                      <button class="secondary active" type="button" data-teacher-view="school">Por escola</button>
-                      <button class="secondary" type="button" data-teacher-view="detail">Por professor</button>
+                      <button class="secondary active" type="button" data-teacher-view="detail">Por professor</button>
+                      <button class="secondary" type="button" data-teacher-view="school">Por escola</button>
                     </div>
                     <button class="secondary" id="downloadTeacherSpreadsheet" type="button">
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
@@ -583,7 +608,7 @@
             </section>
 
             <section class="hidden" id="directorsArea">
-              <button class="back-button" data-back-home type="button" style="margin-bottom:12px">
+              <button class="back-button hidden" data-back-home type="button" style="margin-bottom:12px">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
                 Voltar
               </button>
@@ -592,23 +617,104 @@
                   <p class="eyebrow">Diretores</p>
                   <h3>Formações cadastradas</h3>
                 </div>
-                <div style="display:flex;align-items:center;gap:10px">
-                <button class="secondary" id="reloadFormationsBtn" type="button">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
-                  Atualizar dados
-                </button>
-                <div class="formation-admin-tabs admin-only" id="formationAdminTabs">
-                  <button class="secondary active" type="button" data-formation-admin-view="list">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
-                    Formações
-                  </button>
-                  <button class="secondary" type="button" data-formation-admin-view="form">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
-                    Cadastrar
-                  </button>
-                </div>
-                </div>
               </div>
+
+              <section class="directors-overview hidden" id="directorsOverview">
+                <article class="panel filters-panel">
+                  <div class="panel-head">
+                    <div>
+                      <p class="eyebrow">Visão geral</p>
+                      <h3>Dashboard de formações de diretores</h3>
+                    </div>
+                    <span class="import-timestamp hidden" id="directorsOverviewUpdated"></span>
+                  </div>
+                  <div class="filter-row directors-overview-filters">
+                    <div class="search-wrap">
+                      <svg class="search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                      <input class="search" id="directorsOverviewSearch" placeholder="Buscar por formação, escola, INEP ou GRE..." />
+                    </div>
+                    <select id="directorsOverviewFormationFilter">
+                      <option value="todos">Formação: Todas</option>
+                    </select>
+                    <select id="directorsOverviewGreFilter" class="admin-only">
+                      <option value="todos">GRE: Todas</option>
+                    </select>
+                    <select id="directorsOverviewStatusFilter">
+                      <option value="todos">Situação: Todas</option>
+                      <option value="inscritas">Inscritas</option>
+                      <option value="nao-inscritas">Não inscritas</option>
+                      <option value="credenciadas">Credenciadas</option>
+                      <option value="nao-credenciadas">Não credenciadas</option>
+                    </select>
+                  </div>
+                </article>
+
+                <div class="metrics-grid" id="directorsOverviewMetrics"></div>
+
+                <div class="insight-row" id="directorsOverviewInsights"></div>
+
+                <div class="overview-charts-row" id="directorsOverviewChartsRow">
+                  <article class="panel goal-panel" id="directorsOverviewGrePanel">
+                    <div class="panel-head compact-head">
+                      <div>
+                        <p class="eyebrow">GREs</p>
+                        <h3>Desempenho consolidado</h3>
+                      </div>
+                      <button class="mini-button hidden" type="button" id="directorsOverviewClearGre">Limpar seleção</button>
+                    </div>
+                    <div class="goal-grid">
+                      <div>
+                        <div class="goal-chart" id="directorsOverviewBars"></div>
+                        <div class="goal-bar-legend" id="directorsOverviewLegend"></div>
+                      </div>
+                      <div class="goal-pie-wrap">
+                        <div class="goal-pie" id="directorsOverviewPie"></div>
+                      </div>
+                    </div>
+                  </article>
+
+                  <article class="panel goal-panel" id="directorsOverviewFormationGrePanel">
+                    <div class="panel-head compact-head">
+                      <div>
+                        <p class="eyebrow">Comparativo</p>
+                        <h3 id="directorsOverviewFormationGreTitle">Credenciadas por formação e GRE</h3>
+                        <p class="panel-subtitle" id="directorsOverviewFormationGreSubtitle">Percentual de escolas credenciadas por formação em cada GRE</p>
+                      </div>
+                      <div class="goal-toggle" id="directorsOverviewFormationGreToggle">
+                        <button class="secondary active" type="button" data-formation-gre-mode="credenciadas">Credenciadas</button>
+                        <button class="secondary" type="button" data-formation-gre-mode="nao-credenciadas">Não credenciadas</button>
+                      </div>
+                    </div>
+                    <div class="heatmap-table-wrap">
+                      <table class="heatmap-table" id="directorsOverviewFormationGreHeatmap"></table>
+                    </div>
+                    <div class="heatmap-legend" id="directorsOverviewFormationGreLegend"></div>
+                  </article>
+                </div>
+
+                <article class="panel">
+                  <div class="panel-head">
+                    <div>
+                      <p class="eyebrow">Resumo</p>
+                      <h3>Formações no recorte</h3>
+                    </div>
+                  </div>
+                  <div class="table-wrap">
+                    <table class="overview-table">
+                      <thead>
+                        <tr>
+                          <th>Formação</th>
+                          <th>Escolas</th>
+                          <th>Inscrição</th>
+                          <th>Credenciamento</th>
+                          <th>Prazo</th>
+                        </tr>
+                      </thead>
+                      <tbody id="directorsOverviewTable"></tbody>
+                    </table>
+                  </div>
+                </article>
+              </section>
 
               <form class="panel formation-form hidden admin-only" id="formationForm">
                 <div class="panel-head">
@@ -666,26 +772,18 @@
               <div class="formation-grid" id="formationCards"></div>
 
               <section class="hidden" id="formationDetail">
-                <div class="detail-header">
-                  <div class="detail-actions">
-                    <button class="back-button" id="backToFormations" aria-label="Voltar para formações">
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-                      Voltar para formações
-                    </button>
-                    <button class="secondary" id="reloadRecursoBtn">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
-                      Atualizar recursos
-                    </button>
-                    <button class="secondary admin-only" id="importCsvBtn">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-                      Importar planilha
-                    </button>
-                    <input type="file" id="importCsvInput" accept=".xlsx,.xls,.csv,.tsv,.txt" style="display:none" />
-                  </div>
-                </div>
                 <div class="detail-title">
                   <h3 id="formationName">Formação</h3>
-                  <span class="import-timestamp hidden" id="formationImportTimestamp"></span>
+                  <div class="detail-title-actions">
+                    <button class="icon-tag-button" id="backToFormations" type="button" title="Voltar para formações" aria-label="Voltar para formações">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                    </button>
+                    <button class="icon-tag-button admin-only" id="importCsvBtn" type="button" title="Importar planilha" aria-label="Importar planilha">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                    </button>
+                    <input type="file" id="importCsvInput" accept=".xlsx,.xls,.csv,.tsv,.txt" style="display:none" />
+                    <span class="import-timestamp hidden" id="formationImportTimestamp"></span>
+                  </div>
                 </div>
 
                 <div class="metrics-grid" id="formationMetrics"></div>
@@ -841,10 +939,6 @@
                           <th>Escola</th>
                           <th>Inscrito</th>
                           <th>Credenciado</th>
-                          <th>Rec. Inscrição</th>
-                          <th>Resultado</th>
-                          <th>Rec. Credenciamento</th>
-                          <th>Resultado</th>
                           <th>Representante</th>
                           <th></th>
                         </tr>
@@ -1067,6 +1161,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
-    <script src="app.js?v=26"></script>
+    <script src="app.js?v=66"></script>
   </body>
 </html>
