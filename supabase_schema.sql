@@ -151,6 +151,10 @@ alter table public.professor_dados
   add column if not exists resultado text not null default '',
   add column if not exists imported_at timestamptz not null default now();
 
+drop index if exists professor_dados_cpf_idx;
+alter table public.professor_dados
+  drop column if exists cpf;
+
 create index if not exists professor_dados_formacao_id_idx
   on public.professor_dados (formacao_id);
 

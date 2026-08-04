@@ -6,7 +6,8 @@ from pathlib import Path
 import openpyxl
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = Path(r"C:\Users\rayllonp\Downloads\PROFESSORES PODE ESCOLA.xlsx")
+SUMMARY_SOURCE = Path(r"C:\Users\rayllonp\Documents\BASE_FORMAÇÕES\Professor\IEG\Total_docente_escola_2026.xlsx")
+ROSTER_SOURCE = Path(r"C:\Users\rayllonp\Downloads\_docentes_por_escola___siage_2026_2026-07-23T15_39_56.137185795-03_00.xlsx")
 
 
 def gre_order(value):
@@ -14,7 +15,7 @@ def gre_order(value):
     return int(digits or 0)
 
 
-wb = openpyxl.load_workbook(SOURCE, data_only=True)
+wb = openpyxl.load_workbook(SUMMARY_SOURCE, data_only=True)
 ws = wb.active
 
 schools = []
@@ -28,6 +29,26 @@ for gre, inep, escola, professores in list(ws.iter_rows(values_only=True))[1:]:
                 "professores": int(professores or 0),
             }
         )
+
+roster_wb = openpyxl.load_workbook(ROSTER_SOURCE, data_only=True)
+roster_ws = roster_wb.active
+teacher_roster = []
+seen_teacher_school = set()
+for gre, inep, escola, cpf, docente in list(roster_ws.iter_rows(values_only=True))[1:]:
+    if not (gre and inep and cpf and docente):
+        continue
+    item = {
+        "gre": str(gre).strip(),
+        "inep": str(inep).strip(),
+        "escola": str(escola).strip(),
+        "nome": str(docente).strip(),
+    }
+    clean_cpf = "".join(ch for ch in str(cpf).strip() if ch.isdigit()).zfill(11)
+    key = (clean_cpf, item["inep"])
+    if key in seen_teacher_school:
+        continue
+    seen_teacher_school.add(key)
+    teacher_roster.append(item)
 
 gres = sorted({school["gre"] for school in schools}, key=gre_order)
 responsaveis = {gre: f"Gerente {gre.split('ª')[0].strip()}" for gre in gres}
@@ -130,6 +151,7 @@ data_dir.mkdir(exist_ok=True)
             "events": events,
             "inscricoes": inscricoes,
             "participantes": participantes,
+            "teacherRoster": teacher_roster,
             "users": users,
             "responsaveis": responsaveis,
         },
@@ -173,4 +195,7 @@ with (templates_dir / "modelo_evento.csv").open("w", encoding="utf-8-sig", newli
             ]
         )
 
-print(f"Geradas {len(schools)} escolas, {len(gres)} GREs e {len(participantes)} participantes.")
+print(
+    f"Geradas {len(schools)} escolas, {len(gres)} GREs, "
+    f"{len(teacher_roster)} docentes fixos e {len(participantes)} participantes."
+)

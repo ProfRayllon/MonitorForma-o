@@ -25,3 +25,10 @@ build/
 *.tmp
 *.bak
 *.swp
+
+# Bases sensiveis de docentes/status (podem conter CPF)
+*docente*.xlsx
+*docentes*.xlsx
+*professor*.xlsx
+*professores*.xlsx
+*status*.xlsx

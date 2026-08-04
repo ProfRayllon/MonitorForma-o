@@ -54,6 +54,7 @@ const state = {
   teacherSortDir: "asc",
   teacherPersonSortKey: null,
   teacherPersonSortDir: "asc",
+  _teacherRosterIndex: null,
   dashboardCoursePage: 1,
   dashboardSchoolPage: 1,
   schoolsTablePage: 1,
@@ -91,6 +92,19 @@ const esc = (value) =>
     .replaceAll("'", "&#039;");
 
 const yes = (value) => ["sim", "s", "yes", "true", "1"].includes(normalize(value));
+const digitsOnly = (value) => String(value || "").replace(/\D/g, "");
+const normalizeCpf = (value) => {
+  const digits = digitsOnly(value);
+  return digits.length >= 9 && digits.length <= 11 ? digits.padStart(11, "0") : "";
+};
+const TEACHER_STATUS_DONE = "Conclu\u00eddo";
+const TEACHER_STATUS_NOT_DONE = "N\u00e3o conclu\u00eddo";
+const TEACHER_STATUS_NOT_STARTED = TEACHER_STATUS_NOT_DONE;
+const isTeacherDoneStatus = (value) => {
+  const n = normalize(value);
+  return !n.includes("nao") && (n.includes("conclu") || n.includes("aprov") || n.includes("finaliz"));
+};
+const teacherDisplayStatus = (value) => isTeacherDoneStatus(value) ? TEACHER_STATUS_DONE : TEACHER_STATUS_NOT_DONE;
 const pct = (value, total) => (!total ? "0%" : `${Math.round((value / total) * 100)}%`);
 const slug = (value) =>
   normalize(value)
@@ -3729,6 +3743,66 @@ function getGres() {
 
 // ─── PROFESSORES ────────────────────────────────────────────────────────────
 
+function getTeacherRosterIndex() {
+  if (state._teacherRosterIndex) return state._teacherRosterIndex;
+  const byNameInep = new Map();
+  const countByInep = new Map();
+  const rows = [];
+
+  (state.base?.teacherRoster || []).forEach((item) => {
+    const inep = String(item.inep || "").trim();
+    const nomeKey = normalize(item.nome);
+    const normalized = {
+      gre: item.gre || "",
+      inep,
+      escola: item.escola || "",
+      nome: item.nome || "",
+    };
+    if (!inep) return;
+    rows.push(normalized);
+    countByInep.set(inep, (countByInep.get(inep) || 0) + 1);
+    if (nomeKey) byNameInep.set(`${nomeKey}|${inep}`, normalized);
+  });
+
+  state._teacherRosterIndex = { byNameInep, countByInep, rows };
+  return state._teacherRosterIndex;
+}
+
+function teacherIdentityKey(row = {}) {
+  return `${String(row.inep || "").trim()}|${normalize(row.nome)}`;
+}
+
+function findTeacherRosterMatch({ inep = "", nome = "" } = {}) {
+  const index = getTeacherRosterIndex();
+  const cleanInep = String(inep || "").trim();
+  if (cleanInep && nome) {
+    return index.byNameInep.get(`${normalize(nome)}|${cleanInep}`) || null;
+  }
+  return null;
+}
+
+function getTeacherRosterBaseRows() {
+  return getTeacherRosterIndex().rows.map((item) => ({
+    nome: item.nome,
+    email: "",
+    inep: item.inep,
+    gre: item.gre,
+    escola: item.escola,
+    conclusao: 0,
+    media: 0,
+    resultado: TEACHER_STATUS_NOT_DONE,
+    cursoId: state.teacherFilterCourseIds?.length === 1 ? state.teacherFilterCourseIds[0] : null,
+    formacaoId: state.teacherFormationId,
+    fixedRoster: true,
+  }));
+}
+
+function getTeacherExpectedByInep(inep, school = null) {
+  const value = Number(school?.professores);
+  if (Number.isFinite(value)) return value;
+  return getTeacherRosterIndex().countByInep.get(String(inep || "").trim()) || 0;
+}
+
 function getTeacherFormationIds() {
   return state.formations
     .filter((f) => f.id && normalize(f.publico || "").includes("professor"))
@@ -3778,16 +3852,18 @@ async function loadTeacherRowsFromDb(formacaoId) {
     const schoolByInep = new Map();
     (state.base?.schools || []).forEach((s) => schoolByInep.set(String(s.inep), s));
     const mapped = rows.map((r) => {
-      const school = schoolByInep.get(String(r.inep || ""));
+      const match = findTeacherRosterMatch({ inep: r.inep, nome: r.nome });
+      const inep = String(match?.inep || r.inep || "");
+      const school = schoolByInep.get(inep) || match;
       return {
-        nome: r.nome || "",
+        nome: match?.nome || r.nome || "",
         email: r.email || "",
-        inep: String(r.inep || ""),
+        inep,
         gre: school?.gre || "",
         escola: school?.escola || "",
         conclusao: Number(r.conclusao || 0),
         media: Number(r.media || 0),
-        resultado: r.resultado || "",
+        resultado: teacherDisplayStatus(r.resultado),
         cursoId: r.curso_id || null,
         importedAt: r.imported_at || "",
         formacaoId,
@@ -3906,12 +3982,95 @@ function parseTeacherRows(rows2D) {
     const media = mediaRaw ? Math.max(0, parseFloat(mediaRaw.replace(",", ".")) || 0) : 0;
 
     const resultadoRaw = col(row, "resultado", "status", "situacao");
-    const resultado = resultadoRaw || (conclusao >= 100 ? "Concluído" : conclusao > 0 ? "Em andamento" : "Não iniciado");
+    const resultado = resultadoRaw || (conclusao >= 100 ? "Concluído" : "Não concluído");
 
     const school = schoolByInep.get(inep);
     rows.push({ nome, email, inep, gre: school?.gre || "", escola: school?.escola || "", conclusao, media, resultado });
   });
   return rows;
+}
+
+function parseTeacherRowsWithFixedRoster(rows2D) {
+  if (!rows2D.length) return [];
+  const rawHeaders = rows2D[0].map((h) => normalizeKey(String(h ?? "")));
+  const idx = {};
+  rawHeaders.forEach((h, i) => { if (!(h in idx)) idx[h] = i; });
+
+  const col = (row, ...keys) => {
+    for (const k of keys) {
+      if (idx[k] !== undefined) return String(row[idx[k]] ?? "").trim();
+    }
+    for (const k of keys) {
+      const prefixKey = Object.keys(idx).find((h) => h.startsWith(k) || k.startsWith(h));
+      if (prefixKey !== undefined) return String(row[idx[prefixKey]] ?? "").trim();
+    }
+    for (const k of keys) {
+      const includesKey = Object.keys(idx).find((h) => h.includes(k));
+      if (includesKey !== undefined) return String(row[idx[includesKey]] ?? "").trim();
+    }
+    return "";
+  };
+
+  const schoolByInep = new Map();
+  (state.base?.schools || []).forEach((s) => schoolByInep.set(String(s.inep), s));
+  const statusRank = { [TEACHER_STATUS_NOT_DONE]: 0, [TEACHER_STATUS_DONE]: 1 };
+  const normalizeTeacherStatus = (raw, conclusao) => {
+    const n = normalize(raw);
+    if (n.includes("nao") && (n.includes("conclu") || n.includes("conlcu") || n.includes("finaliz") || n.includes("aprov"))) return TEACHER_STATUS_NOT_DONE;
+    if (n.includes("pendente") || n.includes("reprov")) return TEACHER_STATUS_NOT_DONE;
+    if (n.includes("conclu") || n.includes("aprov") || n.includes("finaliz")) return TEACHER_STATUS_DONE;
+    if (n.includes("nao") && n.includes("inici")) return TEACHER_STATUS_NOT_DONE;
+    if (n.includes("andamento") || n.includes("cursando") || n.includes("inici")) return TEACHER_STATUS_NOT_DONE;
+    return conclusao >= 100 ? TEACHER_STATUS_DONE : TEACHER_STATUS_NOT_DONE;
+  };
+
+  const byIdentity = new Map();
+  rows2D.slice(1).forEach((row) => {
+    const rawInep = col(row, "inep", "codigoinep", "codinep", "escolainep");
+    const rawNome = col(row, "nome", "nomeservidor", "nomeprofessor", "professor", "docente");
+    const cpf = normalizeCpf(col(row, "cpf", "cpfservidor", "documento", "identificacao", "identificador"));
+    const match = findTeacherRosterMatch({ inep: rawInep, nome: rawNome });
+    const inep = String(match?.inep || rawInep || "").trim();
+    if (!inep) return;
+
+    const nome = match?.nome || rawNome;
+    const email = col(row, "email", "emailservidor");
+    const conclusaoRaw = col(row, "conclusao", "conclusao2026", "percentual", "pct", "progresso");
+    let conclusao = 0;
+    if (conclusaoRaw) {
+      const clean = conclusaoRaw.replace(",", ".").replace("%", "").trim();
+      const num = parseFloat(clean);
+      if (!isNaN(num)) conclusao = num > 1.5 ? Math.min(100, num) : Math.round(num * 100);
+    }
+
+    const mediaRaw = col(row, "mediadanota", "media", "nota", "mediadadanota");
+    const media = mediaRaw ? Math.max(0, parseFloat(mediaRaw.replace(",", ".")) || 0) : 0;
+    const resultado = normalizeTeacherStatus(col(row, "status", "resultado", "situacao"), conclusao);
+    if (resultado === TEACHER_STATUS_DONE && conclusao === 0) conclusao = 100;
+    const school = schoolByInep.get(inep) || match;
+    const identity = match ? teacherIdentityKey(match) : teacherIdentityKey({ inep, nome });
+    const uploadIdentity = cpf ? `cpf:${cpf}|${inep}` : identity;
+    const item = {
+      nome,
+      email,
+      inep,
+      gre: school?.gre || "",
+      escola: school?.escola || "",
+      conclusao,
+      media,
+      resultado,
+    };
+    const current = byIdentity.get(uploadIdentity) || byIdentity.get(identity);
+    if (!current) {
+      byIdentity.set(uploadIdentity, item);
+    } else {
+      current.conclusao = Math.max(current.conclusao || 0, item.conclusao || 0);
+      current.media = Math.max(current.media || 0, item.media || 0);
+      if ((statusRank[item.resultado] ?? 0) > (statusRank[current.resultado] ?? 0)) current.resultado = item.resultado;
+      if (!current.email && item.email) current.email = item.email;
+    }
+  });
+  return [...byIdentity.values()];
 }
 
 async function importTeacherCsv(file) {
@@ -3931,8 +4090,8 @@ async function importTeacherCsv(file) {
       } else {
         rows2D = parseCsv(await file.text());
       }
-      const rows = parseTeacherRows(rows2D);
-      if (!rows.length) throw new Error("Nenhum dado encontrado. Verifique se a planilha tem as colunas NOME, EMAIL, INEP, CONCLUSÃO.");
+      const rows = parseTeacherRowsWithFixedRoster(rows2D);
+      if (!rows.length) throw new Error("Nenhum dado encontrado. Verifique se a planilha tem CPF ou INEP, alem das colunas de professor e conclusao.");
 
       const cursoId = state.selectedCourseId || null;
       const taggedRows = rows.map((r) => ({ ...r, cursoId }));
@@ -3992,18 +4151,16 @@ function getTeacherSchoolRows() {
         gre: r.gre || school?.gre || "",
         inep: r.inep,
         escola: r.escola || school?.escola || "",
-        esperado: school?.professores || 0,
+        esperado: getTeacherExpectedByInep(r.inep, school),
         total: 0,
         concluidos: 0,
-        emAndamento: 0,
         naoIniciados: 0,
         somaMedia: 0,
       });
     }
     const entry = byInep.get(r.inep);
     entry.total++;
-    if (r.resultado === "Concluído") entry.concluidos++;
-    else if (r.resultado === "Em andamento") entry.emAndamento++;
+    if (isTeacherDoneStatus(r.resultado)) entry.concluidos++;
     else entry.naoIniciados++;
     entry.somaMedia += r.media || 0;
   });
@@ -4015,7 +4172,6 @@ function getTeacherSchoolRows() {
     esperado: e.esperado,
     total: e.total,
     concluidos: e.concluidos,
-    emAndamento: e.emAndamento,
     naoIniciados: e.naoIniciados,
     mediaEscola: e.total > 0 ? Math.round((e.somaMedia / e.total) * 10) / 10 : 0,
     pct: e.total > 0 ? Math.round((e.concluidos / e.total) * 100) : 0,
@@ -4032,7 +4188,7 @@ function filteredTeacherPersonRows() {
   return getFilteredTeacherRowsByReportFilters().filter((r) => {
     if (!isAdmin && userGre && r.gre !== userGre) return false;
     if (greF !== "todos" && r.gre !== greF) return false;
-    if (concF !== "todos" && r.resultado !== concF) return false;
+    if (concF !== "todos" && teacherDisplayStatus(r.resultado) !== concF) return false;
     if (q) {
       const text = normalize(`${r.nome} ${r.email} ${r.inep} ${r.escola} ${r.gre}`);
       if (!text.includes(q)) return false;
@@ -4050,8 +4206,7 @@ function filteredTeacherSchoolRows() {
   return schools.filter((s) => {
     if (greF !== "todos" && s.gre !== greF) return false;
     if (concF === "Concluído" && s.concluidos === 0) return false;
-    if (concF === "Em andamento" && s.emAndamento === 0) return false;
-    if (concF === "Não iniciado" && s.naoIniciados === 0) return false;
+    if (concF === "Não concluído" && s.naoIniciados === 0) return false;
     if (q) {
       const text = normalize(`${s.gre} ${s.inep} ${s.escola}`);
       if (!text.includes(q)) return false;
@@ -4078,7 +4233,7 @@ function getFilteredTeacherRowsByReportFilters() {
   const trilhas = new Set(state.teacherFilterTrilhas || []);
   const coursesById = new Map(state.courses.map((c) => [c.id, c]));
 
-  return state.teacherRows.filter((row) => {
+  const importedRows = state.teacherRows.filter((row) => {
     const rowFormationId = row.formacaoId || state.teacherFormationId;
     if (formationIds.size && !formationIds.has(rowFormationId)) return false;
     const course = coursesById.get(row.cursoId);
@@ -4086,6 +4241,49 @@ function getFilteredTeacherRowsByReportFilters() {
     if (trilhas.size && !trilhas.has(course?.trilha || "")) return false;
     return true;
   });
+
+  const importedByTeacher = new Map();
+  importedRows.forEach((row) => {
+    const key = teacherIdentityKey(row);
+    if (!key || key === "|") return;
+    const current = importedByTeacher.get(key);
+    if (!current) {
+      importedByTeacher.set(key, row);
+      return;
+    }
+    if ((row.conclusao || 0) > (current.conclusao || 0)) current.conclusao = row.conclusao || 0;
+    if ((row.media || 0) > (current.media || 0)) current.media = row.media || 0;
+    current.resultado = isTeacherDoneStatus(row.resultado) || isTeacherDoneStatus(current.resultado)
+      ? TEACHER_STATUS_DONE
+      : TEACHER_STATUS_NOT_DONE;
+    if (!current.email && row.email) current.email = row.email;
+    if (!current.importedAt && row.importedAt) current.importedAt = row.importedAt;
+  });
+
+  const usedKeys = new Set();
+  const baseRows = getTeacherRosterBaseRows().map((baseRow) => {
+    const key = teacherIdentityKey(baseRow);
+    const imported = importedByTeacher.get(key);
+    usedKeys.add(key);
+    if (!imported) return baseRow;
+    return {
+      ...baseRow,
+      email: imported.email || "",
+      conclusao: Number(imported.conclusao || 0),
+      media: Number(imported.media || 0),
+      resultado: teacherDisplayStatus(imported.resultado),
+      cursoId: imported.cursoId || baseRow.cursoId,
+      formacaoId: imported.formacaoId || baseRow.formacaoId,
+      importedAt: imported.importedAt || "",
+      fixedRoster: true,
+    };
+  });
+
+  const unmatchedImported = [...importedByTeacher.entries()]
+    .filter(([key]) => !usedKeys.has(key))
+    .map(([, row]) => ({ ...row, resultado: teacherDisplayStatus(row.resultado), fixedRoster: false }));
+
+  return [...baseRows, ...unmatchedImported];
 }
 
 function backToCourses() {
@@ -4154,17 +4352,15 @@ function renderTeacherDashboard() {
 
   // KPIs
   const total = rows.length;
-  const concluidos = rows.filter((r) => r.resultado === "Concluído").length;
-  const emAndamento = rows.filter((r) => r.resultado === "Em andamento").length;
-  const naoIniciados = rows.filter((r) => !r.resultado || r.resultado === "Não iniciado").length;
+  const concluidos = rows.filter((r) => isTeacherDoneStatus(r.resultado)).length;
+  const naoIniciados = Math.max(0, total - concluidos);
   const pct = total > 0 ? Math.round((concluidos / total) * 100) : 0;
   const pctNao = total > 0 ? Math.round((naoIniciados / total) * 100) : 0;
   const metricsEl = $("#dashboardMetrics");
   if (metricsEl) {
     const kpis = [
       { label: "Inscritos", value: total.toLocaleString("pt-BR"), v: "metric-accent" },
-      { label: "Não iniciados", value: naoIniciados.toLocaleString("pt-BR"), sub: `${pctNao}%`, v: "metric-danger" },
-      { label: "Em andamento", value: emAndamento.toLocaleString("pt-BR"), v: "metric-wait" },
+      { label: "Não concluídos", value: naoIniciados.toLocaleString("pt-BR"), sub: `${pctNao}%`, v: "metric-danger" },
       { label: "Concluídos", value: concluidos.toLocaleString("pt-BR"), v: "metric-ok" },
       { label: "Taxa de conclusão", value: `${pct}%`, v: "metric-ok" },
     ];
@@ -4186,7 +4382,7 @@ function renderDashboardGreBars(rows) {
     if (!byGre.has(r.gre)) byGre.set(r.gre, { total: 0, concluidos: 0 });
     const e = byGre.get(r.gre);
     e.total++;
-    if (r.resultado === "Concluído") e.concluidos++;
+    if (isTeacherDoneStatus(r.resultado)) e.concluidos++;
   });
   const ranges = [
     { key: "high",    color: "#22c55e", label: "90% ou mais",   test: (v) => v >= 90 },
@@ -4237,13 +4433,12 @@ function renderDashboardCourseTable(filteredCourses, rows) {
   if (!headEl || !bodyEl) return;
   const pctColor = (v) => v >= 90 ? "#22c55e" : v >= 50 ? "#38bdf8" : v >= 30 ? "#f59e0b" : "#ef4444";
   const { pageItems } = paginateItems(filteredCourses, "dashboardCoursePage");
-  headEl.innerHTML = `<th>Curso</th><th>Trilha</th><th class="th-num">Inscritos</th><th class="th-num">Concluídos</th><th class="th-num">Em andamento</th><th class="th-num">Não iniciados</th><th class="th-num">%</th>`;
+  headEl.innerHTML = `<th>Curso</th><th>Trilha</th><th class="th-num">Inscritos</th><th class="th-num">Concluídos</th><th class="th-num">Não concluídos</th><th class="th-num">%</th>`;
   bodyEl.innerHTML = pageItems.map((c) => {
     const cr = rows.filter((r) => r.cursoId === c.id);
     const ins = cr.length;
-    const con = cr.filter((r) => r.resultado === "Concluído").length;
-    const and = cr.filter((r) => r.resultado === "Em andamento").length;
-    const nao = ins - con - and;
+    const con = cr.filter((r) => isTeacherDoneStatus(r.resultado)).length;
+    const nao = ins - con;
     const p = ins > 0 ? Math.round((con / ins) * 100) : 0;
     const color = pctColor(p);
     const trilhaStyle = c.trilha ? TRILHA_COLORS[c.trilha] : null;
@@ -4253,11 +4448,10 @@ function renderDashboardCourseTable(filteredCourses, rows) {
       <td>${trilhaBadge}</td>
       <td class="td-num">${ins.toLocaleString("pt-BR")}</td>
       <td class="td-num">${con.toLocaleString("pt-BR")}</td>
-      <td class="td-num">${and.toLocaleString("pt-BR")}</td>
       <td class="td-num">${nao.toLocaleString("pt-BR")}</td>
       <td><div class="pct-bar-wrap"><div class="pct-bar-track"><div class="pct-bar-fill" style="width:${Math.min(100,p)}%;background:${color}"></div></div><span class="pct-bar-label" style="color:${color}">${p}%</span></div></td>
     </tr>`;
-  }).join("") || `<tr><td colspan="7" class="empty-row">Nenhum dado.</td></tr>`;
+  }).join("") || `<tr><td colspan="6" class="empty-row">Nenhum dado.</td></tr>`;
   renderPagination("#dashCoursePagination", "dashboardCoursePage", filteredCourses.length, () => renderDashboardCourseTable(filteredCourses, rows));
 }
 
@@ -4274,7 +4468,7 @@ function renderDashboardSchoolTable() {
     if (!byInep.has(r.inep)) byInep.set(r.inep, { gre: r.gre, escola: r.escola || r.inep, total: 0, concluidos: 0 });
     const e = byInep.get(r.inep);
     e.total++;
-    if (r.resultado === "Concluído") e.concluidos++;
+    if (isTeacherDoneStatus(r.resultado)) e.concluidos++;
   });
   let entries = [...byInep.values()].sort((a, b) => getGreNumber(a.gre) - getGreNumber(b.gre) || a.escola.localeCompare(b.escola));
   if (search) entries = entries.filter((e) => normalize(e.escola).includes(search) || normalize(e.gre).includes(search));
@@ -4299,12 +4493,11 @@ function exportDashboardXlsx() {
   const { rows, filteredCourses } = getDashboardRows();
   const wb = window.XLSX.utils.book_new();
   // Sheet: por curso
-  const courseHeaders = ["Curso", "Trilha", "Carga horária", "Inscritos", "Concluídos", "Em andamento", "Não iniciados", "%"];
+  const courseHeaders = ["Curso", "Trilha", "Carga horária", "Inscritos", "Concluídos", "Não concluídos", "%"];
   const courseData = filteredCourses.map((c) => {
     const cr = rows.filter((r) => r.cursoId === c.id);
-    const ins = cr.length; const con = cr.filter((r) => r.resultado === "Concluído").length;
-    const and = cr.filter((r) => r.resultado === "Em andamento").length;
-    return [c.nome, c.trilha || "", c.cargaHoraria || "", ins, con, and, ins - con - and, ins > 0 ? Math.round(con / ins * 100) + "%" : "0%"];
+    const ins = cr.length; const con = cr.filter((r) => isTeacherDoneStatus(r.resultado)).length;
+    return [c.nome, c.trilha || "", c.cargaHoraria || "", ins, con, ins - con, ins > 0 ? Math.round(con / ins * 100) + "%" : "0%"];
   });
   window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.aoa_to_sheet([courseHeaders, ...courseData]), "Por Curso");
   // Sheet: por escola
@@ -4675,12 +4868,11 @@ function renderTeachersArea() {
   const totalEsperado = isAdmin
     ? schools
       .filter((sc) => !selectedGre || selectedGre === "todos" || sc.gre === selectedGre)
-      .reduce((s, sc) => s + (sc.professores || 0), 0)
-    : schools.filter((sc) => sc.gre === state.user?.gre).reduce((s, sc) => s + (sc.professores || 0), 0);
+      .reduce((s, sc) => s + getTeacherExpectedByInep(sc.inep, sc), 0)
+    : schools.filter((sc) => sc.gre === state.user?.gre).reduce((s, sc) => s + getTeacherExpectedByInep(sc.inep, sc), 0);
   const totalInscritos = allPersonRows.length;
-  const totalConcluidos = allPersonRows.filter((r) => r.resultado === "Concluído").length;
-  const totalEmAndamento = allPersonRows.filter((r) => r.resultado === "Em andamento").length;
-  const totalNaoIniciados = allPersonRows.filter((r) => !r.resultado || r.resultado === "Não iniciado").length;
+  const totalConcluidos = allPersonRows.filter((r) => isTeacherDoneStatus(r.resultado)).length;
+  const totalNaoIniciados = Math.max(0, totalInscritos - totalConcluidos);
   const pctNaoIniciados = totalInscritos > 0 ? Math.round((totalNaoIniciados / totalInscritos) * 100) : 0;
   const pctGeral = totalInscritos > 0 ? Math.round((totalConcluidos / totalInscritos) * 100) : 0;
   const totalEscolas = schoolRows.length;
@@ -4689,10 +4881,8 @@ function renderTeachersArea() {
   const metricsEl = $("#teacherMetrics");
   if (metricsEl) {
     const allItems = [
-      { label: "Professores esperados", value: totalEsperado.toLocaleString("pt-BR"), variant: "metric-primary", adminOnly: true, icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>` },
-      { label: "Professores inscritos", value: totalInscritos.toLocaleString("pt-BR"), variant: "metric-accent", icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="8" x2="16" y1="13" y2="13"/><line x1="8" x2="16" y1="17" y2="17"/></svg>` },
-      { label: "Não iniciados", value: totalNaoIniciados.toLocaleString("pt-BR"), sub: `${pctNaoIniciados}%`, variant: "metric-danger", icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>` },
-      { label: "Em andamento", value: totalEmAndamento.toLocaleString("pt-BR"), variant: "metric-wait", icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>` },
+      { label: "Total SIAGE", value: totalEsperado.toLocaleString("pt-BR"), variant: "metric-primary", icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>` },
+      { label: "Não concluídos", value: totalNaoIniciados.toLocaleString("pt-BR"), sub: `${pctNaoIniciados}%`, variant: "metric-danger", icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>` },
       { label: "Concluídos", value: totalConcluidos.toLocaleString("pt-BR"), variant: "metric-ok", icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>` },
       { label: "Taxa de conclusão", value: `${pctGeral}%`, variant: "metric-ok", icon: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="18" y1="20" y2="10"/><line x1="12" x2="12" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="14"/></svg>` },
     ];
@@ -4719,7 +4909,7 @@ function renderTeachersArea() {
       state._teacherRegionalPersonStats = { pct: pctGeral, concluidos: totalConcluidos, total: totalInscritos };
       renderTeacherRegionalGauge(schoolRows);
 
-      state._teacherPersonStatusCounts = { concluidos: totalConcluidos, emAndamento: totalEmAndamento, naoIniciados: totalNaoIniciados };
+      state._teacherPersonStatusCounts = { concluidos: totalConcluidos, naoIniciados: totalNaoIniciados };
       renderTeacherStatusChart(state._teacherPersonStatusCounts);
     }
   }
@@ -4727,7 +4917,7 @@ function renderTeachersArea() {
   // GRE filter options
   const greFilter = $("#teacherGreFilter");
   if (greFilter && isAdmin) {
-    const gres = [...new Set(state.teacherRows.map((r) => r.gre).filter(Boolean))].sort((a, b) => getGreNumber(a) - getGreNumber(b));
+    const gres = [...new Set(getFilteredTeacherRowsByReportFilters().map((r) => r.gre).filter(Boolean))].sort((a, b) => getGreNumber(a) - getGreNumber(b));
     const prev = greFilter.value;
     greFilter.innerHTML = `<option value="todos">GRE: Todas</option>` + gres.map((g) => `<option value="${esc(g)}">${esc(g)}</option>`).join("");
     if (gres.includes(prev)) greFilter.value = prev;
@@ -4754,8 +4944,7 @@ function niceScaleMax(value) {
 }
 
 const STATUS_SEGMENT_COLORS = [
-  { key: "Não iniciado", label: "Não iniciado", color: "#f43f5e" },
-  { key: "Em andamento", label: "Em andamento", color: "#f59e0b" },
+  { key: "Não concluído", label: "Não concluído", color: "#f43f5e" },
   { key: "Concluído", label: "Concluído", color: "#10b981" },
 ];
 
@@ -4812,8 +5001,8 @@ function renderTeacherStatusChart(personCounts) {
   if (!plotEl || !legendEl) return;
 
   const activeFilter = state.teachersConclusaoFilter;
-  const total = personCounts.concluidos + personCounts.emAndamento + personCounts.naoIniciados;
-  const segments = STATUS_SEGMENT_COLORS.map((seg) => ({ ...seg, value: seg.key === "Não iniciado" ? personCounts.naoIniciados : seg.key === "Em andamento" ? personCounts.emAndamento : personCounts.concluidos }));
+  const total = personCounts.concluidos + personCounts.naoIniciados;
+  const segments = STATUS_SEGMENT_COLORS.map((seg) => ({ ...seg, value: seg.key === "Não concluído" ? personCounts.naoIniciados : personCounts.concluidos }));
 
   const niceMax = niceScaleMax(Math.max(1, ...segments.map((s) => s.value)));
   const tickCount = 5;
@@ -5113,8 +5302,9 @@ function renderTeachersTable() {
     return "#ef4444";
   };
   const resultadoPill = (res) => {
-    const map = { "Concluído": "ok", "Em andamento": "wait", "Não iniciado": "no" };
-    return `<span class="pill ${map[res] || "no"}">${esc(res || "Não iniciado")}</span>`;
+    const status = teacherDisplayStatus(res);
+    const map = { [TEACHER_STATUS_DONE]: "ok", [TEACHER_STATUS_NOT_DONE]: "no" };
+    return `<span class="pill ${map[status] || "no"}">${esc(status)}</span>`;
   };
   const sortArrow = (key, sortKeyState, sortDirState) => {
     const active = sortKeyState === key;
@@ -5137,7 +5327,6 @@ function renderTeachersTable() {
           case "esperado": return s.esperado;
           case "total": return s.total;
           case "naoIniciados": return s.naoIniciados;
-          case "emAndamento": return s.emAndamento;
           case "concluidos": return s.concluidos;
           case "pct": return s.pct;
           default: return 0;
@@ -5155,51 +5344,38 @@ function renderTeachersTable() {
     if (titleEl) titleEl.textContent = "Por escola";
     if (countEl) countEl.textContent = `${rows.length} escola${rows.length !== 1 ? "s" : ""}`;
 
-    if (colgroupEl) colgroupEl.innerHTML = strictAdmin ? `
+    if (colgroupEl) colgroupEl.innerHTML = `
       <col style="width:72px">
       <col style="width:96px">
-      <col style="width:260px">
-      <col style="width:88px">
-      <col style="width:88px">
-      <col style="width:110px">
-      <col style="width:110px">
-      <col style="width:100px">
-      <col style="width:160px">` : `
-      <col style="width:72px">
-      <col style="width:96px">
-      <col style="width:300px">
+      <col style="width:320px">
       <col style="width:88px">
       <col style="width:110px">
       <col style="width:110px">
-      <col style="width:100px">
       <col style="width:160px">`;
 
     headEl.innerHTML = `<tr>
       ${sortTh("GRE", "gre")}${sortTh("INEP", "inep")}${sortTh("Escola", "escola")}
-      ${strictAdmin ? sortTh("Esperados", "esperado", "th-num") : ""}
-      ${sortTh("Inscritos", "total", "th-num")}
-      ${sortTh("Não iniciados", "naoIniciados", "th-num")}${sortTh("Em andamento", "emAndamento", "th-num")}${sortTh("Concluídos", "concluidos", "th-num")}
+      ${sortTh("SIAGE", "esperado", "th-num")}
+      ${sortTh("Não concluídos", "naoIniciados", "th-num")}${sortTh("Concluídos", "concluidos", "th-num")}
       ${sortTh("Porcentagem", "pct", "th-num")}
     </tr>`;
 
-    const colspan = strictAdmin ? 9 : 8;
+    const colspan = 7;
     bodyEl.innerHTML = pageItems.map((s) => {
       const color = pctColor(s.pct);
       return `<tr>
         <td class="td-gre">${esc(s.gre)}</td>
         <td><code class="inep-code">${esc(s.inep)}</code></td>
         <td class="td-escola"><strong>${esc(s.escola)}</strong></td>
-        ${strictAdmin ? `<td class="td-num">${s.esperado.toLocaleString("pt-BR")}</td>` : ""}
-        <td class="td-num">${s.total.toLocaleString("pt-BR")}</td>
+        <td class="td-num">${s.esperado.toLocaleString("pt-BR")}</td>
         <td class="td-num" style="color:var(--danger);font-weight:800">${s.naoIniciados.toLocaleString("pt-BR")}</td>
-        <td class="td-num" style="color:var(--wait);font-weight:800">${s.emAndamento.toLocaleString("pt-BR")}</td>
         <td class="td-num" style="color:var(--ok);font-weight:800">${s.concluidos.toLocaleString("pt-BR")}</td>
         <td>
           <div class="pct-bar-wrap">
             <div class="pct-bar-track">
               <div class="pct-bar-fill" style="width:${Math.min(100, s.pct)}%;background:${color}"></div>
             </div>
-            <span class="pct-bar-label" style="color:${color}">${s.pct}%</span>
+            <span class="pct-bar-label" style="color:${color};font-size:1rem;font-weight:900">${s.pct}%</span>
           </div>
         </td>
       </tr>`;
@@ -5237,36 +5413,24 @@ function renderTeachersTable() {
     if (colgroupEl) colgroupEl.innerHTML = `
       <col style="width:72px">
       <col style="width:96px">
-      <col style="width:220px">
-      <col style="width:240px">
-      <col style="width:160px">
-      <col style="width:70px">
+      <col style="width:300px">
+      <col style="width:320px">
       <col style="width:130px">`;
 
     headEl.innerHTML = `<tr>
       ${sortThPerson("GRE", "gre")}${sortThPerson("INEP", "inep")}${sortThPerson("Escola", "escola")}${sortThPerson("Nome", "nome")}
-      ${sortThPerson("Conclusão", "conclusao", "th-num")}${sortThPerson("Média", "media", "th-num")}${sortThPerson("Resultado", "resultado")}
+      ${sortThPerson("Resultado", "resultado")}
     </tr>`;
 
     bodyEl.innerHTML = pageItems.map((r) => {
-      const color = pctColor(r.conclusao);
       return `<tr>
         <td class="td-gre">${esc(r.gre)}</td>
         <td><code class="inep-code">${esc(r.inep)}</code></td>
         <td class="td-escola" style="font-size:0.8rem">${esc(r.escola)}</td>
         <td><strong>${esc(r.nome)}</strong>${r.email ? `<br><small class="muted">${esc(r.email)}</small>` : ""}</td>
-        <td>
-          <div class="pct-bar-wrap">
-            <div class="pct-bar-track">
-              <div class="pct-bar-fill" style="width:${Math.min(100, r.conclusao)}%;background:${color}"></div>
-            </div>
-            <span class="pct-bar-label" style="color:${color}">${r.conclusao}%</span>
-          </div>
-        </td>
-        <td class="td-num">${r.media > 0 ? r.media.toFixed(1) : "—"}</td>
         <td>${resultadoPill(r.resultado)}</td>
       </tr>`;
-    }).join("") || `<tr><td colspan="7" class="empty-row">Nenhum professor encontrado.</td></tr>`;
+    }).join("") || `<tr><td colspan="5" class="empty-row">Nenhum professor encontrado.</td></tr>`;
     renderPagination("#teacherTablePagination", "teacherTablePage", rows.length, renderTeachersTable);
   }
 }
@@ -5277,12 +5441,12 @@ function downloadTeacherSpreadsheet() {
   let data, headers;
   if (state.teachersView === "school") {
     const rows = filteredTeacherSchoolRows();
-    headers = ["GRE", "INEP", "Escola", "Esperados", "Na planilha", "Concluídos", "Porcentagem (%)"];
-    data = rows.map((s) => [s.gre, s.inep, s.escola, s.esperado, s.total, s.concluidos, s.pct]);
+    headers = ["GRE", "INEP", "Escola", "SIAGE", "Não concluídos", "Concluídos", "Porcentagem (%)"];
+    data = rows.map((s) => [s.gre, s.inep, s.escola, s.esperado, s.naoIniciados, s.concluidos, s.pct]);
   } else {
     const rows = filteredTeacherPersonRows();
-    headers = ["GRE", "INEP", "Escola", "Nome", "E-mail", "Conclusão (%)", "Média da Nota", "Resultado"];
-    data = rows.map((r) => [r.gre, r.inep, r.escola, r.nome, r.email, r.conclusao, r.media, r.resultado]);
+    headers = ["GRE", "INEP", "Escola", "Nome", "E-mail", "Resultado"];
+    data = rows.map((r) => [r.gre, r.inep, r.escola, r.nome, r.email, teacherDisplayStatus(r.resultado)]);
   }
 
   const ws = window.XLSX.utils.aoa_to_sheet([headers, ...data]);
