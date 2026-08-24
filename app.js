@@ -1959,8 +1959,17 @@ function daysUntil(dateStr) {
   return Math.ceil((target - today) / 86400000);
 }
 
+// Uma formação conta como de professores quando o público diz isso ou quando
+// já existem cursos vinculados a ela — evita que um curso suma dos filtros por
+// causa de um público mal preenchido no cadastro da formação.
+function isTeacherFormation(formation) {
+  if (!formation?.id) return false;
+  if (normalize(formation.publico || "").includes("professor")) return true;
+  return state.courses.some((c) => c.formacaoId === formation.id);
+}
+
 function directorFormations() {
-  return state.formations.filter((f) => f.id && f.nome && !normalize(f.publico || "").includes("professor"));
+  return state.formations.filter((f) => f.id && f.nome && !isTeacherFormation(f));
 }
 
 function formationUrgentDeadline(formation) {
@@ -3621,12 +3630,12 @@ function getTeacherExpectedByInep(inep, school = null) {
 
 function getTeacherFormationIds() {
   return state.formations
-    .filter((f) => f.id && normalize(f.publico || "").includes("professor"))
+    .filter(isTeacherFormation)
     .map((f) => f.id);
 }
 
 async function ensureTeacherFormation() {
-  const existing = state.formations.find((f) => normalize(f.publico || "").includes("professor"));
+  const existing = state.formations.find(isTeacherFormation);
   if (existing) return existing.id;
 
   const f = {
@@ -4032,13 +4041,13 @@ function filteredTeacherSchoolRows() {
 }
 
 function getTeacherSelectedFormationIds() {
-  const teacherFormations = state.formations.filter((f) => f.id && normalize(f.publico || "").includes("professor"));
+  const teacherFormations = state.formations.filter(isTeacherFormation);
   const selected = state.teacherFilterFormationIds?.length ? state.teacherFilterFormationIds : teacherFormations.map((f) => f.id);
   return selected.filter((id) => teacherFormations.some((f) => f.id === id));
 }
 
 function getTeacherDraftFormationIds() {
-  const teacherFormations = state.formations.filter((f) => f.id && normalize(f.publico || "").includes("professor"));
+  const teacherFormations = state.formations.filter(isTeacherFormation);
   const selected = state.teacherDraftFormationIds?.length ? state.teacherDraftFormationIds : teacherFormations.map((f) => f.id);
   return selected.filter((id) => teacherFormations.some((f) => f.id === id));
 }
@@ -4482,7 +4491,7 @@ function resetCourseForm() {
 function populateCourseFormationSelect(selectedId = "") {
   const select = $("#courseFormationSelect");
   if (!select) return;
-  const formations = state.formations.filter((f) => f.id && f.nome && normalize(f.publico || "").includes("professor"));
+  const formations = state.formations.filter((f) => f.nome && isTeacherFormation(f));
   select.innerHTML = `<option value="">Selecione a formação</option>` +
     formations.map((f) => `<option value="${esc(f.id)}">${esc(f.nome)}</option>`).join("");
   const fallback = formations[0]?.id || "";
@@ -4641,7 +4650,7 @@ function renderTeacherListCards() {
   const container = $("#teacherFormationCards");
   if (!container || state.formationMode !== "teachers-list") return;
   const isAdmin = hasAdminAccess();
-  const formations = state.formations.filter((f) => f.id && f.nome && normalize(f.publico || "").includes("professor"));
+  const formations = state.formations.filter((f) => f.nome && isTeacherFormation(f));
   const userGre = state.user?.gre;
 
   container.innerHTML = formations.map((f) => {
@@ -4952,7 +4961,7 @@ function renderTeacherReportCourses() {
 
   if (_reportMsCleanup) { document.removeEventListener("click", _reportMsCleanup); _reportMsCleanup = null; }
 
-  const teacherFormations = state.formations.filter((f) => f.id && normalize(f.publico || "").includes("professor"));
+  const teacherFormations = state.formations.filter(isTeacherFormation);
   const draftFormationIds = getTeacherDraftFormationIds();
   const draftFormationSet = new Set(draftFormationIds);
   const formationScopedCourses = state.courses.filter((c) => draftFormationSet.has(c.formacaoId));
