@@ -1211,7 +1211,7 @@ function renderShell() {
     isTeacherFormationPage() ? "Professores" : "Diretores";
   $("#pageTitle").textContent =
     state.tab === "users" ? "Gerenciamento de usuarios" :
-    state.tab === "home" ? "Visao geral do sistema" :
+    state.tab === "home" ? "Visão geral do sistema" :
     state.tab === "profile" ? "Meu Perfil" :
     isTeacherFormationPage() ? "Formações de professores" : "Formações de diretores";
   const strictAdmin = state.user?.perfil === "admin";
@@ -1275,190 +1275,7 @@ function isTeacherFormationPage() {
 function renderHome() {
   const el = $("#homeDashboard");
   if (!el || state.tab !== "home") return;
-
-  const greeting = (() => {
-    const h = new Date().getHours();
-    if (h < 12) return "Bom dia";
-    if (h < 18) return "Boa tarde";
-    return "Boa noite";
-  })();
-
-  const allFormations = state.formations.filter((f) => f.id && f.nome);
-  let totalSchools = 0, totalInscritos = 0, totalCredenciados = 0;
-  allFormations.forEach((f) => {
-    const summary = summarizeFormation(f);
-    totalSchools += summary.total;
-    totalInscritos += summary.inscritos;
-    totalCredenciados += summary.credenciados;
-  });
-  const pctInscricao = totalSchools ? Math.round((totalInscritos / totalSchools) * 100) : 0;
-  const pctCred = totalSchools ? Math.round((totalCredenciados / totalSchools) * 100) : 0;
-
-  const statsHtml = [
-    {
-      label: "Formações ativas",
-      value: allFormations.length,
-      icon: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>`,
-      bg: "rgba(124,58,237,0.16)", color: "var(--primary-2)",
-    },
-    {
-      label: "Escolas monitoradas",
-      value: (state.base?.schools?.length || 0).toLocaleString("pt-BR"),
-      icon: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
-      bg: "rgba(6,182,212,0.14)", color: "var(--accent)",
-    },
-    {
-      label: "Taxa de inscrição",
-      value: pctInscricao + "%",
-      icon: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`,
-      bg: "rgba(16,185,129,0.14)", color: "var(--ok)",
-    },
-    {
-      label: "Taxa de credenciamento",
-      value: pctCred + "%",
-      icon: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/></svg>`,
-      bg: "rgba(245,158,11,0.14)", color: "var(--wait)",
-    },
-  ]
-    .map(
-      (s) => `
-      <div class="home-stat-card">
-        <div class="stat-icon" style="background:${s.bg};color:${s.color}">${s.icon}</div>
-        <div class="stat-value">${esc(String(s.value))}</div>
-        <div class="stat-label">${esc(s.label)}</div>
-      </div>
-    `,
-    )
-    .join("");
-
-  const formationsHtml = allFormations.length
-    ? allFormations
-        .map((f) => {
-          const s = summarizeFormation(f);
-          const pI = s.total ? Math.round((s.inscritos / s.total) * 100) : 0;
-          const pC = s.total ? Math.round((s.credenciados / s.total) * 100) : 0;
-          const totalLabel = s.total
-            ? `${s.total.toLocaleString("pt-BR")} escola${s.total !== 1 ? "s" : ""}`
-            : "Sem base";
-          return `
-          <div class="home-formation-card" data-home-formation="${esc(f.id)}">
-            <div class="home-fc-head">
-              <div>
-                <strong>${esc(f.nome)}</strong>
-                <span>${esc(f.publico || "Formação")}</span>
-              </div>
-              <small>${esc(totalLabel)}</small>
-            </div>
-            <div class="home-fc-metrics">
-              <div class="home-fc-metric">
-                <span>Inscrição</span>
-                <strong>${pI}%</strong>
-                <small>${s.inscritos.toLocaleString("pt-BR")} de ${s.total.toLocaleString("pt-BR")}</small>
-              </div>
-              <div class="home-fc-metric credential">
-                <span>Credenciamento</span>
-                <strong>${pC}%</strong>
-                <small>${s.credenciados.toLocaleString("pt-BR")} de ${s.total.toLocaleString("pt-BR")}</small>
-              </div>
-            </div>
-            <div class="home-fc-bar-wrap">
-              <div class="home-fc-bar-label"><span>Inscrição</span><span>${pI}%</span></div>
-              <div class="home-fc-bar"><span style="width:${pI}%;background:linear-gradient(90deg,var(--primary-2),var(--accent))"></span></div>
-            </div>
-            <div class="home-fc-bar-wrap">
-              <div class="home-fc-bar-label"><span>Credenciamento</span><span>${pC}%</span></div>
-              <div class="home-fc-bar"><span style="width:${pC}%;background:linear-gradient(90deg,var(--ok),var(--accent))"></span></div>
-            </div>
-          </div>
-        `;
-        })
-        .join("")
-    : `<p class="muted">Nenhuma formação cadastrada ainda. Acesse <strong>Formações</strong> para cadastrar.</p>`;
-
-  // Gráfico comparativo
-  const CHART_H = 150;
-  const chartBarsHtml = allFormations.length >= 1
-    ? allFormations.map((f) => {
-        const s = summarizeFormation(f);
-        const pI = s.total ? Math.round((s.inscritos / s.total) * 100) : 0;
-        const pC = s.total ? Math.round((s.credenciados / s.total) * 100) : 0;
-        const hI = Math.max(6, Math.round((pI / 100) * CHART_H));
-        const hC = Math.max(6, Math.round((pC / 100) * CHART_H));
-        const shortName = f.nome.length > 22 ? f.nome.slice(0, 20) + "…" : f.nome;
-        return `
-          <div class="compare-group">
-            <div class="compare-bars">
-              <div class="compare-bar"
-                style="height:${hI}px;background:linear-gradient(180deg,#c084fc 0%,#7c3aed 100%)"
-                title="Inscrição: ${pI}%">
-                <span class="compare-bar-pct">${pI}%</span>
-              </div>
-              <div class="compare-bar"
-                style="height:${hC}px;background:linear-gradient(180deg,#34d399 0%,#059669 100%)"
-                title="Credenciamento: ${pC}%">
-                <span class="compare-bar-pct">${pC}%</span>
-              </div>
-            </div>
-            <div class="compare-label" title="${esc(f.nome)}">${esc(shortName)}</div>
-          </div>
-        `;
-      }).join("")
-    : `<p class="muted" style="margin:auto">Nenhuma formação para comparar.</p>`;
-
-  el.innerHTML = `
-    <div class="home-welcome">
-      <h3>${esc(greeting)}, ${esc(state.user?.nome?.split(" ")[0] || "usuário")}!</h3>
-      <p>Aqui está o panorama geral de todas as formacoes cadastradas no sistema.</p>
-    </div>
-    <div class="home-summary-grid">${statsHtml}</div>
-
-    <div class="home-chart-panel">
-      <article class="panel">
-        <div class="panel-head compact-head">
-          <div>
-            <p class="eyebrow">Comparativo</p>
-            <h3>Inscrição e Credenciamento por formação</h3>
-          </div>
-        </div>
-        <div class="compare-chart-wrap">${chartBarsHtml}</div>
-        <div class="compare-legend">
-          <span>
-            <i style="background:linear-gradient(90deg,#c084fc,#7c3aed)"></i>
-            Inscrição
-          </span>
-          <span>
-            <i style="background:linear-gradient(90deg,#34d399,#059669)"></i>
-            Credenciamento
-          </span>
-        </div>
-      </article>
-    </div>
-
-    <div class="home-section-title" style="margin-top:24px">
-      <h3>Formações cadastradas</h3>
-      <button class="secondary" id="homeGoToFormations">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
-        Ver todas
-      </button>
-    </div>
-    <div class="home-formation-list">${formationsHtml}</div>
-  `;
-
-  on("#homeGoToFormations", "click", () => {
-    state.tab = "formation";
-    state.formationMode = "directors";
-    render();
-  });
-
-  $$("[data-home-formation]").forEach((card) => {
-    card.addEventListener("click", () => {
-      state.tab = "formation";
-      state.formationMode = "directors";
-      state.selectedFormationId = card.dataset.homeFormation;
-      render();
-      syncVisibleFormation();
-    });
-  });
+  el.innerHTML = "";
 }
 
 function renderProfile() {
@@ -2601,7 +2418,6 @@ function renderFormationCards() {
     b.addEventListener("click", () => {
       state.selectedFormationId = b.dataset.formation;
       render();
-      syncVisibleFormation();
     });
   });
 }
@@ -4528,6 +4344,7 @@ function renderCoursesList() {
   const container = $("#courseCards");
   if (!container || state.formationMode !== "courses") return;
   const isAdmin = hasAdminAccess();
+  const strictAdmin = state.user?.perfil === "admin";
   const formacaoId = state.teacherFormationId;
   const formation = state.formations.find((f) => f.id === formacaoId);
   const nameEl = $("#coursesFormationName");
@@ -4545,6 +4362,7 @@ function renderCoursesList() {
       return fa.localeCompare(fb) || String(a.nome || "").localeCompare(String(b.nome || ""));
     });
   const iconClock = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
+  const iconDownload = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
 
   const userGre = state.user?.gre;
   container.innerHTML = courses.map((c) => {
@@ -4577,6 +4395,7 @@ function renderCoursesList() {
         <div class="event-progress"><span style="width:${Math.min(100, pct)}%"></span></div>
         <div class="event-foot"><span>${pct}% conclusão</span></div>
         <div class="card-actions">
+          ${strictAdmin && naplanilha ? `<button class="mini-button" data-download-course="${esc(c.id)}">${iconDownload}Baixar base</button>` : ""}
           ${isAdmin ? `<button class="mini-button" data-edit-course="${esc(c.id)}">Editar</button>` : ""}
           ${isAdmin ? `<button class="mini-button danger-button" data-delete-course="${esc(c.id)}">Excluir</button>` : ""}
         </div>
@@ -4589,6 +4408,62 @@ function renderCoursesList() {
   container.querySelectorAll("[data-delete-course]").forEach((b) => {
     b.addEventListener("click", () => confirmDeleteCourse(b.dataset.deleteCourse));
   });
+  container.querySelectorAll("[data-download-course]").forEach((b) => {
+    b.addEventListener("click", () => downloadCourseBase(b.dataset.downloadCourse, b));
+  });
+}
+
+async function downloadCourseBase(id, button = null) {
+  if (state.user?.perfil !== "admin") {
+    notify("Acesso restrito", "Apenas o administrador pode baixar a base importada.", "error");
+    return;
+  }
+  const course = state.courses.find((c) => c.id === id);
+  if (!course) return;
+  if (!window.XLSX) { notify("Erro", "Biblioteca XLSX não carregada.", "error"); return; }
+
+  const originalHtml = button ? button.innerHTML : "";
+  if (button) { button.disabled = true; button.textContent = "Gerando..."; }
+  try {
+    let rows = state.teacherRows.filter((r) => r.cursoId === id);
+    if (!rows.length && course.formacaoId) {
+      try {
+        const loaded = await loadTeacherRowsFromDb(course.formacaoId);
+        rows = loaded.filter((r) => r.cursoId === id);
+      } catch (error) {
+        notify("Erro ao carregar base", error?.message || "Sem conexão com o banco.", "error");
+        return;
+      }
+    }
+    if (!rows.length) {
+      notify("Sem dados", "Este curso ainda não tem base importada.", "warning");
+      return;
+    }
+
+    const headers = ["GRE", "INEP", "Escola", "Nome", "E-mail", "Conclusão (%)", "Média", "Resultado"];
+    const data = rows
+      .slice()
+      .sort((a, b) => String(a.gre || "").localeCompare(String(b.gre || "")) || String(a.nome || "").localeCompare(String(b.nome || "")))
+      .map((r) => [
+        r.gre || "",
+        r.inep || "",
+        r.escola || "",
+        r.nome || "",
+        r.email || "",
+        Number(r.conclusao || 0),
+        Number(r.media || 0),
+        teacherDisplayStatus(r.resultado),
+      ]);
+
+    const ws = window.XLSX.utils.aoa_to_sheet([headers, ...data]);
+    const wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, ws, "Base");
+    const slug = normalize(course.nome || "curso").replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "curso";
+    window.XLSX.writeFile(wb, `base_${slug}.xlsx`);
+    notify("Base exportada", `${rows.length.toLocaleString("pt-BR")} registros baixados em XLSX.`);
+  } finally {
+    if (button) { button.disabled = false; button.innerHTML = originalHtml; }
+  }
 }
 
 function resetCourseForm() {
