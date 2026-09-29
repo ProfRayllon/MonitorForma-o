@@ -6,6 +6,7 @@ const state = {
   dbConnected: false,
   bootstrapError: "",
   sidebarCollapsed: false,
+  theme: "dark",
   tab: "formation",
   formationMode: "directors",
   directorView: "overview",
@@ -77,6 +78,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_XwPyaNxJ1BFTplBsTRmOLQ_wBOp1OUm";
 const db = window.supabase?.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) || null;
 const SESSION_KEY = "monitor-current-user";
 const SIDEBAR_COLLAPSED_KEY = "monitor-sidebar-collapsed";
+const THEME_KEY = "monitor-theme";
 const DB_PAGE_SIZE = 1000;
 const TABLE_PAGE_SIZE = 10;
 
@@ -357,6 +359,8 @@ async function init() {
   clearTeacherRowsCache();
   state.sidebarCollapsed = loadStored(SIDEBAR_COLLAPSED_KEY, "collapsed") !== "expanded";
   applySidebarCollapsed();
+  state.theme = loadStored(THEME_KEY, "dark") === "light" ? "light" : "dark";
+  applyTheme();
   bindEvents();
   fillLoginHint();
   clearLoginForm();
@@ -1020,9 +1024,25 @@ function applySidebarCollapsed() {
   btn.setAttribute("aria-label", label);
 }
 
+function applyTheme() {
+  document.documentElement.dataset.theme = state.theme;
+  const btn = $("#themeToggle");
+  if (!btn) return;
+  const label = state.theme === "light" ? "Tema escuro" : "Tema claro";
+  btn.title = label;
+  btn.setAttribute("aria-label", label);
+  const text = btn.querySelector(".theme-label");
+  if (text) text.textContent = label;
+}
+
 function bindEvents() {
   on("#loginForm", "submit", handleLogin);
   on("#logoutButton", "click", logout);
+  on("#themeToggle", "click", () => {
+    state.theme = state.theme === "light" ? "dark" : "light";
+    saveStored(THEME_KEY, state.theme);
+    applyTheme();
+  });
   on("#sidebarCollapse", "click", () => {
     state.sidebarCollapsed = !state.sidebarCollapsed;
     saveStored(SIDEBAR_COLLAPSED_KEY, state.sidebarCollapsed ? "collapsed" : "expanded");
@@ -1681,6 +1701,7 @@ function renderFormationMode() {
   $("#directorsTopActions")?.classList.toggle("hidden", !isDirectors);
   $("#teachersTopActions")?.classList.toggle("hidden", !isTeachers);
   $("#teachersOverviewLabel").textContent = isAdmin ? "Visão geral" : "Dashboard";
+  $("#directorsOverviewLabel").textContent = isAdmin ? "Visão geral" : "Dashboard";
   $("#teachersOverviewBtn")?.classList.toggle("active", state.formationMode === "teachers" && !state.teacherFormationId);
   $("#teachersFormationsBtn")?.classList.toggle("active", state.formationMode === "teachers-list" || (state.formationMode === "teachers" && Boolean(state.teacherFormationId)));
   $("#teachersCoursesBtn")?.classList.toggle("active", state.formationMode === "courses");
@@ -2339,7 +2360,7 @@ function renderDirectorOverviewGreChart(rows) {
   const percent = total ? Math.round((credenciados / total) * 100) : 0;
   const range = rangeFor(percent);
   const pie = $("#directorsOverviewPie");
-  pie.style.background = `conic-gradient(${range.color} 0 ${percent}%, rgba(255,255,255,0.08) ${percent}% 100%)`;
+  pie.style.background = `conic-gradient(${range.color} 0 ${percent}%, var(--track) ${percent}% 100%)`;
   pie.innerHTML = `<strong>${percent}%</strong><span>${credenciados.toLocaleString("pt-BR")}<br>credenciadas</span>`;
 }
 
@@ -2873,7 +2894,7 @@ function renderRegionalInsights(rows, summary) {
     const pendingSchoolLabel = pending === 1 ? "escola" : "escolas";
 
     $(gauge).style.setProperty("--credential-color", gaugeColor);
-    $(gauge).style.background = `conic-gradient(${gaugeColor} 0 ${percent}%, rgba(255,255,255,0.08) ${percent}% 100%)`;
+    $(gauge).style.background = `conic-gradient(${gaugeColor} 0 ${percent}%, var(--track) ${percent}% 100%)`;
     $(percentEl).textContent = `${percent}%`;
     $(summaryEl).textContent = `${done} de ${total} ${schoolLabel} ${doneText}`;
     $(hintEl).textContent = pending > 0 ? pendingHint(pending) : completeText;
@@ -3349,7 +3370,7 @@ function renderGreBars(rows) {
 function getGreNumber(gre) { return Number(String(gre).match(/\d+/)?.[0] || 0); }
 
 function renderGrePie(summary) {
-  const track = "rgba(255,255,255,0.08)";
+  const track = "var(--track)";
   const pie = $("#grePie");
   pie.style.background = `conic-gradient(${summary.range.color} 0 ${summary.percent}%, ${track} ${summary.percent}% 100%)`;
 
@@ -4942,7 +4963,7 @@ function renderDashboardGreBars(rows) {
   const pieEl = $("#dashboardPie");
   if (pieEl) {
     const range = rangeFor(overall);
-    pieEl.style.background = `conic-gradient(${range.color} 0 ${overall}%, rgba(255,255,255,0.08) ${overall}% 100%)`;
+    pieEl.style.background = `conic-gradient(${range.color} 0 ${overall}%, var(--track) ${overall}% 100%)`;
     pieEl.style.setProperty("--pie-glow", `${range.color}70`);
     pieEl.style.setProperty("--pie-glow-far", `${range.color}28`);
     pieEl.innerHTML = `<strong>${overall}%</strong><span>${totalC.toLocaleString("pt-BR")}<br>concluídos</span>`;
@@ -4967,7 +4988,7 @@ function renderDashboardCourseTable(filteredCourses, rows) {
     const p = ins > 0 ? Math.round((con / ins) * 100) : 0;
     const color = pctColor(p);
     const trilhaStyle = c.trilha ? TRILHA_COLORS[c.trilha] : null;
-    const trilhaBadge = trilhaStyle ? `<span class="formation-tag" style="font-size:0.68rem;background:${trilhaStyle.bg};border-color:${trilhaStyle.border};color:${trilhaStyle.color}">${esc(c.trilha)}</span>` : `<span style="color:var(--muted);font-size:0.78rem">—</span>`;
+    const trilhaBadge = trilhaStyle ? `<span class="formation-tag" style="font-size:0.68rem;background:${trilhaStyle.bg};border-color:${trilhaStyle.border};--tag-color:${trilhaStyle.color};color:var(--tag-color)">${esc(c.trilha)}</span>` : `<span style="color:var(--muted);font-size:0.78rem">—</span>`;
     return `<tr>
       <td><strong>${esc(c.nome)}</strong>${c.cargaHoraria ? `<br><small class="muted">${esc(c.cargaHoraria)}</small>` : ""}</td>
       <td>${trilhaBadge}</td>
@@ -5087,7 +5108,7 @@ function renderCoursesList() {
     const cargaTag = c.cargaHoraria ? `<span class="formation-tag">${iconClock}${esc(c.cargaHoraria)}</span>` : "";
     const trilhaStyle = c.trilha ? TRILHA_COLORS[c.trilha] : null;
     const trilhaTag = trilhaStyle
-      ? `<span class="formation-tag" style="background:${trilhaStyle.bg};border-color:${trilhaStyle.border};color:${trilhaStyle.color}">${esc(c.trilha)}</span>`
+      ? `<span class="formation-tag" style="background:${trilhaStyle.bg};border-color:${trilhaStyle.border};--tag-color:${trilhaStyle.color};color:var(--tag-color)">${esc(c.trilha)}</span>`
       : "";
     const formationTag = isAllCourses && courseFormation ? `<span class="formation-tag">${esc(courseFormation.nome)}</span>` : "";
     const allTags = [formationTag, cargaTag, trilhaTag].filter(Boolean).join("");
@@ -5326,7 +5347,7 @@ function teacherCourseSummaryHtml(formacaoId, formationRows = []) {
     const percent = total > 0 ? Math.round((done / total) * 100) : 0;
     const trilhaStyle = course.trilha ? TRILHA_COLORS[course.trilha] : null;
     const trilha = course.trilha
-      ? `<span class="teacher-course-pill" style="${trilhaStyle ? `background:${trilhaStyle.bg};border-color:${trilhaStyle.border};color:${trilhaStyle.color}` : ""}">${esc(course.trilha)}</span>`
+      ? `<span class="teacher-course-pill" style="${trilhaStyle ? `background:${trilhaStyle.bg};border-color:${trilhaStyle.border};--tag-color:${trilhaStyle.color};color:var(--tag-color)` : ""}">${esc(course.trilha)}</span>`
       : "";
     return `
       <div class="teacher-course-mini" title="${esc(`${course.nome} - ${percent}% de conclusão`)}">
@@ -5568,7 +5589,7 @@ function renderTeacherRegionalGauge(schoolRows) {
       { color: "#ef4444", test: () => true },
     ];
     const color = (ranges.find((r) => r.test(pct)) || ranges.at(-1)).color;
-    gauge.style.background = `conic-gradient(${color} 0 ${pct}%, rgba(255,255,255,0.08) ${pct}% 100%)`;
+    gauge.style.background = `conic-gradient(${color} 0 ${pct}%, var(--track) ${pct}% 100%)`;
     gauge.style.setProperty("--pie-glow", `${color}70`);
     gauge.style.setProperty("--pie-glow-far", `${color}28`);
   }
@@ -5700,7 +5721,10 @@ function renderTeacherReportCourses() {
     ...formationScopedCourses.map((c) => reportFilterOption({ type: "course", value: c.id, label: c.nome, checked: state.teacherDraftCourseIds.includes(c.id) })),
   ].join("");
 
-  container.innerHTML = `
+  const courseFilterHtml = filterMenuHtml({ key: "curso", label: "Curso", summary: courseSummary, optionsHtml: courseOptions });
+  const applyButtonHtml = `<button class="report-filter-apply" type="button" id="applyTeacherReportFilters">Aplicar filtro</button>`;
+  // Regional: apenas o filtro de curso, na mesma linha do título
+  container.innerHTML = hasAdminAccess() ? `
     <div class="report-filter-panel panel">
       <div class="report-filter-head">
         <div>
@@ -5711,8 +5735,21 @@ function renderTeacherReportCourses() {
       <div class="report-filter-toolbar">
         ${filterMenuHtml({ key: "formacao", label: "Formação", summary: formationSummary, optionsHtml: formationOptions })}
         ${filterMenuHtml({ key: "trilha", label: "Trilha", summary: trilhaSummary, optionsHtml: trilhaOptions })}
-        ${filterMenuHtml({ key: "curso", label: "Curso", summary: courseSummary, optionsHtml: courseOptions })}
-        <button class="report-filter-apply" type="button" id="applyTeacherReportFilters">Aplicar filtro</button>
+        ${courseFilterHtml}
+        ${applyButtonHtml}
+      </div>
+    </div>
+  ` : `
+    <div class="report-filter-panel panel compact">
+      <div class="report-filter-head">
+        <div>
+          <p class="eyebrow">Dashboard</p>
+          <h3>Formações de professores</h3>
+        </div>
+        <div class="report-filter-toolbar">
+          ${courseFilterHtml}
+          ${applyButtonHtml}
+        </div>
       </div>
     </div>
   `;
@@ -5856,7 +5893,7 @@ function renderTeacherGreBars(schoolRows, strictAdmin = true) {
   const pieEl = $("#teacherGrePie");
   if (pieEl) {
     const range = rangeFor(overallPercent);
-    pieEl.style.background = `conic-gradient(${range.color} 0 ${overallPercent}%, rgba(255,255,255,0.08) ${overallPercent}% 100%)`;
+    pieEl.style.background = `conic-gradient(${range.color} 0 ${overallPercent}%, var(--track) ${overallPercent}% 100%)`;
     pieEl.style.setProperty("--pie-glow", `${range.color}70`);
     pieEl.style.setProperty("--pie-glow-far", `${range.color}28`);
     pieEl.innerHTML = `<strong>${overallPercent}%</strong><span>${totalConcluidos.toLocaleString("pt-BR")}<br>concluídos</span>`;
@@ -5952,14 +5989,14 @@ function renderTeachersTable() {
         <td><code class="inep-code">${esc(s.inep)}</code></td>
         <td class="td-escola"><strong>${esc(s.escola)}</strong></td>
         <td class="td-num">${s.esperado.toLocaleString("pt-BR")}</td>
-        <td class="td-num" style="color:var(--danger);font-weight:800">${s.naoIniciados.toLocaleString("pt-BR")}</td>
-        <td class="td-num" style="color:var(--ok);font-weight:800">${s.concluidos.toLocaleString("pt-BR")}</td>
+        <td class="td-num" style="color:var(--danger);font-weight:500">${s.naoIniciados.toLocaleString("pt-BR")}</td>
+        <td class="td-num" style="color:var(--ok);font-weight:500">${s.concluidos.toLocaleString("pt-BR")}</td>
         <td>
           <div class="pct-bar-wrap">
             <div class="pct-bar-track">
               <div class="pct-bar-fill" style="width:${Math.min(100, s.pct)}%;background:${color}"></div>
             </div>
-            <span class="pct-bar-label" style="color:${color};font-size:1rem;font-weight:900">${s.pct}%</span>
+            <span class="pct-bar-label" style="color:${color};font-size:1rem;font-weight:500">${s.pct}%</span>
           </div>
         </td>
       </tr>`;
