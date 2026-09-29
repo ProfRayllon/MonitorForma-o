@@ -928,6 +928,9 @@ option { color: #111; background: #fff; }
   .dashboard.sidebar-collapsed .brand { padding-inline: 4px; }
   .dashboard.sidebar-collapsed .nav-item,
   .dashboard.sidebar-collapsed .ghost-button { padding: 0 12px; overflow: hidden; }
+  /* Recolhido: só o ícone, sem sobra de texto */
+  .dashboard.sidebar-collapsed .sidebar:not(:hover):not(:focus-within) .nav-item,
+  .dashboard.sidebar-collapsed .sidebar:not(:hover):not(:focus-within) .ghost-button { font-size: 0; gap: 0; }
   .dashboard.sidebar-collapsed .sidebar-collapse svg { transform: rotate(180deg); }
 
   /* Elementos só de texto somem enquanto recolhido, mantendo o espaço para não "pular" */
