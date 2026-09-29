@@ -2461,6 +2461,49 @@ option { color: #111; background: #fff; }
 }
 .overview-charts-row.side-by-side #directorsOverviewGrePanel .goal-grid { margin-top: auto; }
 
+/* ─── Regional: só a pizza no desempenho consolidado ─── */
+#directorsOverviewGrePanel.pie-only .goal-grid { grid-template-columns: 1fr; justify-items: center; }
+#directorsOverviewGrePanel.pie-only .goal-grid > div:first-child { display: none; }
+
+/* ─── Regional: comparativo simples (número por formação) ─── */
+.formation-gre-list { display: grid; margin-top: 12px; }
+.formation-gre-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 2px;
+  border-bottom: 1px solid var(--line);
+}
+.formation-gre-item:last-child { border-bottom: 0; }
+.formation-gre-name { display: flex; align-items: center; gap: 10px; min-width: 0; font-size: 0.86rem; }
+.formation-gre-name i { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.formation-gre-value { display: flex; align-items: baseline; gap: 8px; flex-shrink: 0; }
+.formation-gre-value strong { font-size: 1.1rem; font-weight: 500; }
+.formation-gre-value small { color: var(--muted); font-size: 0.74rem; }
+
+/* Alternância credenciadas/não credenciadas em ícones */
+.goal-toggle.icon-toggle { gap: 4px; }
+.goal-toggle.icon-toggle .secondary {
+  justify-content: center;
+  width: 32px;
+  min-height: 32px;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+}
+.goal-toggle.icon-toggle .secondary.active {
+  color: var(--primary-2);
+  background: rgba(124, 58, 237, 0.16);
+  border-color: rgba(168, 85, 247, 0.35);
+}
+
+.countdown-badge.open {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--ok-text);
+  border-color: rgba(16, 185, 129, 0.25);
+}
+
 /* ─── Comparativo por formação (heatmap por GRE) ─── */
 .panel-subtitle { color: var(--muted); font-size: 0.82rem; margin: 4px 0 0; }
 

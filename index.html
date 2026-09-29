@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=66" />
+    <link rel="stylesheet" href="styles.css?v=67" />
   </head>
   <body>
     <!-- LOADER -->
@@ -720,11 +720,12 @@
                         <h3 id="directorsOverviewFormationGreTitle">Credenciadas por formação e GRE</h3>
                         <p class="panel-subtitle" id="directorsOverviewFormationGreSubtitle">Percentual de escolas credenciadas por formação em cada GRE</p>
                       </div>
-                      <div class="goal-toggle" id="directorsOverviewFormationGreToggle">
-                        <button class="secondary active" type="button" data-formation-gre-mode="credenciadas">Credenciadas</button>
-                        <button class="secondary" type="button" data-formation-gre-mode="nao-credenciadas">Não credenciadas</button>
+                      <div class="goal-toggle icon-toggle" id="directorsOverviewFormationGreToggle">
+                        <button class="secondary active" type="button" data-formation-gre-mode="credenciadas" title="Credenciadas" aria-label="Credenciadas"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg></button>
+                        <button class="secondary" type="button" data-formation-gre-mode="nao-credenciadas" title="Não credenciadas" aria-label="Não credenciadas"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/></svg></button>
                       </div>
                     </div>
+                    <div class="formation-gre-list hidden" id="directorsOverviewFormationGreList"></div>
                     <div class="heatmap-table-wrap">
                       <table class="heatmap-table" id="directorsOverviewFormationGreHeatmap"></table>
                     </div>
@@ -1201,6 +1202,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
-    <script src="app.js?v=82"></script>
+    <script src="app.js?v=83"></script>
   </body>
 </html>

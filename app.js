@@ -2120,6 +2120,7 @@ function renderDirectorOverview() {
   const distinctSchools = new Set(rows.map((r) => r.inep)).size;
   const distinctGres = new Set(rows.map((r) => r.gre).filter(Boolean)).size;
   $("#directorsOverviewChartsRow")?.classList.toggle("side-by-side", distinctGres > 0 && distinctGres <= 4);
+  $("#directorsOverviewGrePanel")?.classList.toggle("pie-only", !hasAdminAccess());
 
   const lastUpdate = formations.reduce((latest, f) => {
     if (!f.lastImportedAt) return latest;
@@ -2405,6 +2406,35 @@ function renderDirectorOverviewFormationGreChart(rows, formations) {
 
   const gres = [...new Set(rows.map((r) => r.gre).filter(Boolean))].sort((a, b) => getGreNumber(a) - getGreNumber(b));
 
+  // Regional: só o número por formação, sem mapa de calor
+  const simpleList = $("#directorsOverviewFormationGreList");
+  const simple = !hasAdminAccess();
+  simpleList?.classList.toggle("hidden", !simple);
+  table.closest(".heatmap-table-wrap")?.classList.toggle("hidden", simple);
+  legend.classList.toggle("hidden", simple);
+  if (simple && simpleList) {
+    if (subtitle) subtitle.textContent = isNao ? "Percentual de escolas não credenciadas por formação" : "Percentual de escolas credenciadas por formação";
+    const totals = new Map();
+    rows.forEach((row) => {
+      if (!totals.has(row.formationId)) totals.set(row.formationId, { total: 0, credenciados: 0 });
+      const item = totals.get(row.formationId);
+      item.total += 1;
+      if (row.credenciado) item.credenciados += 1;
+    });
+    simpleList.innerHTML = formationsInView.length ? formationsInView.map((f) => {
+      const item = totals.get(f.id) || { total: 0, credenciados: 0 };
+      const count = isNao ? item.total - item.credenciados : item.credenciados;
+      const percent = item.total ? Math.round((count / item.total) * 100) : 0;
+      return `
+        <div class="formation-gre-item">
+          <span class="formation-gre-name"><i style="background:${formationColor.get(f.id)}"></i>${esc(f.nome)}</span>
+          <span class="formation-gre-value"><strong>${percent}%</strong><small>${count}/${item.total}</small></span>
+        </div>
+      `;
+    }).join("") : `<p class="muted">Nenhum dado no recorte atual.</p>`;
+    return;
+  }
+
   if (!gres.length || !formationsInView.length) {
     table.innerHTML = "";
     legend.innerHTML = `<p class="muted">Nenhum dado no recorte atual.</p>`;
@@ -2460,9 +2490,11 @@ function renderDirectorOverviewTable(rows, formations) {
         const pI = item.total ? Math.round((item.inscritos / item.total) * 100) : 0;
         const pC = item.total ? Math.round((item.credenciados / item.total) * 100) : 0;
         const deadline = formationUrgentDeadline(item.formation);
-        const deadlineHtml = deadline
-          ? `<span class="countdown-badge ${deadline.days < 0 ? "expired" : deadline.days <= 7 ? "urgent" : ""}">${deadline.days < 0 ? "Encerrado" : deadline.days === 0 ? "Hoje" : `${deadline.days}d`} · ${esc(deadline.label)}</span>`
-          : `<span class="muted">—</span>`;
+        const deadlineHtml = !deadline
+          ? `<span class="muted">—</span>`
+          : !hasAdminAccess()
+            ? `<span class="countdown-badge ${deadline.days < 0 ? "expired" : "open"}">${deadline.days < 0 ? "Encerrado" : "Em andamento"}</span>`
+            : `<span class="countdown-badge ${deadline.days < 0 ? "expired" : deadline.days <= 7 ? "urgent" : ""}">${deadline.days < 0 ? "Encerrado" : deadline.days === 0 ? "Hoje" : `${deadline.days}d`} · ${esc(deadline.label)}</span>`;
         return `
           <tr data-overview-formation-row="${esc(item.formation.id)}" tabindex="0">
             <td><strong>${esc(item.formation.nome)}</strong><small class="row-subtext">${item.total.toLocaleString("pt-BR")} escolas</small></td>
