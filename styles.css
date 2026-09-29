@@ -903,55 +903,35 @@ option { color: #111; background: #fff; }
   background: transparent;
   color: var(--muted);
   opacity: 0.55;
-  transition: opacity var(--transition), background var(--transition), transform var(--transition);
+  transition: opacity var(--transition), background var(--transition);
 }
-.sidebar-collapse svg { width: 14px; height: 14px; }
+.sidebar-collapse svg { width: 14px; height: 14px; transition: transform var(--transition); }
 .sidebar-collapse:hover { opacity: 1; background: rgba(124, 58, 237, 0.14); color: var(--ink); }
 
 @media (min-width: 1061px) {
-  .dashboard { transition: grid-template-columns 0.2s ease; }
-  .dashboard.sidebar-collapsed { grid-template-columns: 64px minmax(0, 1fr); }
+  .dashboard.sidebar-collapsed { grid-template-columns: 60px minmax(0, 1fr); }
+  .dashboard.sidebar-collapsed .sidebar { padding: 14px 10px; }
 
-  .sidebar { z-index: 300; white-space: nowrap; overflow-x: hidden; }
-  .dashboard.sidebar-collapsed .sidebar {
-    width: 64px;
-    transition: width 0.18s ease, box-shadow 0.18s ease;
+  /* Recolhido: somente ícones */
+  .dashboard.sidebar-collapsed .brand {
+    flex-direction: column;
+    gap: 8px;
+    padding: 4px 0 12px;
   }
-  /* Expande sobre o conteúdo ao passar o mouse (sem empurrar a página) */
-  .dashboard.sidebar-collapsed .sidebar:hover,
-  .dashboard.sidebar-collapsed .sidebar:focus-within {
-    width: 220px;
-    box-shadow: 12px 0 32px rgba(0, 0, 0, 0.45);
-    transition-delay: 0.12s;
-  }
-
-  .dashboard.sidebar-collapsed .brand { padding-inline: 4px; }
-  .dashboard.sidebar-collapsed .nav-item,
-  .dashboard.sidebar-collapsed .ghost-button { padding: 0 12px; overflow: hidden; }
-  /* Recolhido: só o ícone, sem sobra de texto */
-  .dashboard.sidebar-collapsed .sidebar:not(:hover):not(:focus-within) .nav-item,
-  .dashboard.sidebar-collapsed .sidebar:not(:hover):not(:focus-within) .ghost-button { font-size: 0; gap: 0; }
-  .dashboard.sidebar-collapsed .sidebar-collapse svg { transform: rotate(180deg); }
-
-  /* Elementos só de texto somem enquanto recolhido, mantendo o espaço para não "pular" */
   .dashboard.sidebar-collapsed .brand > div:not(.brand-mark),
-  .dashboard.sidebar-collapsed .sidebar-collapse,
   .dashboard.sidebar-collapsed .nav-group-label,
-  .dashboard.sidebar-collapsed .sidebar-account {
-    opacity: 0;
-    transition: opacity 0.15s ease;
-  }
   .dashboard.sidebar-collapsed .sidebar-account { display: none; }
-  .dashboard.sidebar-collapsed .sidebar:hover .brand > div:not(.brand-mark),
-  .dashboard.sidebar-collapsed .sidebar:hover .sidebar-collapse,
-  .dashboard.sidebar-collapsed .sidebar:hover .sidebar-account,
-  .dashboard.sidebar-collapsed .sidebar:focus-within .brand > div:not(.brand-mark),
-  .dashboard.sidebar-collapsed .sidebar:focus-within .sidebar-collapse,
-  .dashboard.sidebar-collapsed .sidebar:focus-within .sidebar-account { opacity: 1; transition-delay: 0.15s; }
-  .dashboard.sidebar-collapsed .sidebar:hover .sidebar-account,
-  .dashboard.sidebar-collapsed .sidebar:focus-within .sidebar-account { display: flex; }
-  .dashboard.sidebar-collapsed .sidebar:hover .nav-group-label:not(.hidden),
-  .dashboard.sidebar-collapsed .sidebar:focus-within .nav-group-label:not(.hidden) { opacity: 0.45; transition-delay: 0.15s; }
+  .dashboard.sidebar-collapsed .sidebar-collapse { margin-left: 0; }
+  .dashboard.sidebar-collapsed .sidebar-collapse svg { transform: rotate(180deg); }
+  .dashboard.sidebar-collapsed .sidebar-nav { gap: 4px; }
+  .dashboard.sidebar-collapsed .nav-item,
+  .dashboard.sidebar-collapsed .ghost-button {
+    justify-content: center;
+    gap: 0;
+    padding: 0;
+    font-size: 0;
+  }
+  .dashboard.sidebar-collapsed .nav-icon { width: 17px; height: 17px; }
 }
 
 @media (max-width: 1060px) {

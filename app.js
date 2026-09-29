@@ -355,7 +355,7 @@ async function preloadTeacherRows() {
 
 async function init() {
   clearTeacherRowsCache();
-  state.sidebarCollapsed = loadStored(SIDEBAR_COLLAPSED_KEY, "auto") !== "pinned";
+  state.sidebarCollapsed = loadStored(SIDEBAR_COLLAPSED_KEY, "collapsed") !== "expanded";
   applySidebarCollapsed();
   bindEvents();
   fillLoginHint();
@@ -1015,7 +1015,7 @@ function applySidebarCollapsed() {
   $(".dashboard")?.classList.toggle("sidebar-collapsed", state.sidebarCollapsed);
   const btn = $("#sidebarCollapse");
   if (!btn) return;
-  const label = state.sidebarCollapsed ? "Fixar menu aberto" : "Recolher menu";
+  const label = state.sidebarCollapsed ? "Expandir menu" : "Recolher menu";
   btn.title = label;
   btn.setAttribute("aria-label", label);
 }
@@ -1025,7 +1025,7 @@ function bindEvents() {
   on("#logoutButton", "click", logout);
   on("#sidebarCollapse", "click", () => {
     state.sidebarCollapsed = !state.sidebarCollapsed;
-    saveStored(SIDEBAR_COLLAPSED_KEY, state.sidebarCollapsed ? "auto" : "pinned");
+    saveStored(SIDEBAR_COLLAPSED_KEY, state.sidebarCollapsed ? "collapsed" : "expanded");
     applySidebarCollapsed();
   });
   on("#requestSiageSync", "click", showSiageSyncInstructions);
