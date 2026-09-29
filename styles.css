@@ -5,14 +5,10 @@
   z-index: 9999;
   display: grid;
   place-items: center;
-  background:
-    radial-gradient(circle at 50% 40%, rgba(139,92,246,.18), transparent 26%),
-    radial-gradient(circle at 80% 14%, rgba(109,40,217,.14), transparent 20%),
-    radial-gradient(circle at 20% 80%, rgba(76,29,149,.11), transparent 24%),
-    linear-gradient(145deg, #04020a, #09061a);
+  background: rgba(4, 2, 10, .92);
   color: #f8f8ff;
   font-family: Inter, Arial, sans-serif;
-  transition: opacity .45s ease, visibility .45s ease;
+  transition: opacity .12s ease, visibility .12s ease;
 }
 #pageLoader.pl-hide {
   opacity: 0;
@@ -26,6 +22,18 @@
   align-items: center;
   gap: 26px;
   padding: 24px;
+}
+.pl-inner.simple {
+  gap: 0;
+  padding: 12px;
+}
+.pl-spinner {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 3px solid rgba(255,255,255,.18);
+  border-top-color: #8b5cf6;
+  animation: plSpin .72s linear infinite;
 }
 .pl-orb {
   position: absolute;
@@ -150,10 +158,8 @@
   z-index: 8000;
   display: grid;
   place-items: center;
-  background: rgba(7,7,15,.62);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  transition: opacity .25s ease, visibility .25s ease;
+  background: rgba(7,7,15,.28);
+  transition: opacity .12s ease, visibility .12s ease;
 }
 #contentLoader.pl-hide {
   opacity: 0;

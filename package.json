@@ -1,0 +1,28 @@
+{
+  "name": "monitoramento-de-eventos",
+  "version": "1.0.0",
+  "description": "Sistema responsivo para acompanhar formacoes por escola, GRE e INEP.",
+  "main": "app.js",
+  "scripts": {
+    "siage:sync": "node scripts/sync_siage_metabase.mjs",
+    "siage:preview": "node scripts/sync_siage_metabase.mjs --dry-run",
+    "siage:confirm": "node scripts/sync_siage_metabase.mjs --yes",
+    "supabase:schema": "node scripts/apply_supabase_schema.mjs",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ProfRayllon/MonitorForma-o.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/ProfRayllon/MonitorForma-o/issues"
+  },
+  "homepage": "https://github.com/ProfRayllon/MonitorForma-o#readme",
+  "dependencies": {
+    "pg": "^8.23.0"
+  }
+}

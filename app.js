@@ -1,7 +1,10 @@
 const state = {
-  base: null,
+  base: { schools: [], users: [], teacherRoster: [] },
+  staticBaseLoaded: false,
+  baseSource: "empty",
   user: null,
   dbConnected: false,
+  bootstrapError: "",
   tab: "formation",
   formationMode: "directors",
   directorView: "overview",
@@ -25,6 +28,10 @@ const state = {
   formations: [],
   recursos: [],
   teacherRows: [],
+  teacherRowsLoaded: false,
+  teacherRowsLoading: false,
+  teacherRosterLoaded: false,
+  teacherRosterLoading: null,
   teacherFormationId: null,
   teacherFilterFormationIds: [],
   teacherFilterCourseIds: [],
@@ -58,6 +65,10 @@ const state = {
   dashboardCoursePage: 1,
   dashboardSchoolPage: 1,
   schoolsTablePage: 1,
+  siageLots: [],
+  siageLotsLoaded: false,
+  siageDraft: null,
+  siageLoadError: "",
 };
 
 const SUPABASE_URL = "https://intswvnfmizbttlrqhdt.supabase.co";
@@ -165,7 +176,7 @@ function hidePageLoader() {
   const el = document.getElementById("pageLoader");
   if (!el) return;
   el.classList.add("pl-hide");
-  setTimeout(() => el.remove(), 500);
+  setTimeout(() => el.remove(), 140);
 }
 
 function showContentLoader() {
@@ -173,15 +184,7 @@ function showContentLoader() {
   const el = document.createElement("div");
   el.id = "contentLoader";
   el.setAttribute("aria-hidden", "true");
-  el.innerHTML = `<div class="cl-wrap">
-    <div class="cl-ring"></div>
-    <svg viewBox="0 0 400 400">
-      <g class="pl-logo-group">
-        <path pathLength="1" class="pl-ghost-path" d="M306 274 L306 176 L200 115 L94 176 L200 237 L256 205 L256 283 A56 40 0 0 1 144 283 L144 205 L200 237 L306 176"/>
-        <path pathLength="1" class="pl-draw-path"  d="M306 274 L306 176 L200 115 L94 176 L200 237 L256 205 L256 283 A56 40 0 0 1 144 283 L144 205 L200 237 L306 176"/>
-      </g>
-    </svg>
-  </div>`;
+  el.innerHTML = `<div class="pl-spinner" aria-hidden="true"></div>`;
   document.body.appendChild(el);
 }
 
@@ -245,72 +248,174 @@ function showPageLoader() {
   el.id = "pageLoader";
   el.setAttribute("role", "status");
   el.setAttribute("aria-label", "Carregando");
-  el.innerHTML = `<div class="pl-inner">
-    <div class="pl-orb" aria-hidden="true"></div>
-    <section class="pl-logo-wrap">
-      <div class="pl-ring" aria-hidden="true"></div>
-      <svg viewBox="0 0 400 400" aria-hidden="true">
-        <g class="pl-logo-group">
-          <path pathLength="1" class="pl-ghost-path" d="M306 274 L306 176 L200 115 L94 176 L200 237 L256 205 L256 283 A56 40 0 0 1 144 283 L144 205 L200 237 L306 176"/>
-          <path pathLength="1" class="pl-draw-path"  d="M306 274 L306 176 L200 115 L94 176 L200 237 L256 205 L256 283 A56 40 0 0 1 144 283 L144 205 L200 237 L306 176"/>
-        </g>
-      </svg>
-    </section>
-    <div class="pl-text">Carregando<span>.</span><span>.</span><span>.</span></div>
-    <div class="pl-progress" aria-hidden="true"><div></div></div>
-  </div>`;
+  el.innerHTML = `<div class="pl-inner simple"><div class="pl-spinner" aria-hidden="true"></div></div>`;
   document.body.prepend(el);
+}
+
+async function loadLatestSiageOfficialBase() {
+  if (!db) return false;
+  const { data: lot, error } = await db
+    .from("import_lotes")
+    .select("id,created_at,resumo")
+    .eq("tipo", "siage_semanal")
+    .eq("status", "concluido")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  if (!lot?.id) return false;
+
+  const escolas = await selectAllDbRows("siage_escolas", "gre,inep,escola,numero_docentes", (query) =>
+    query.eq("lote_id", lot.id).order("inep", { ascending: true }),
+  );
+
+  state.base = {
+    ...state.base,
+    schools: escolas.map((row) => ({
+      gre: row.gre || "",
+      inep: row.inep || "",
+      escola: row.escola || "",
+      professores: Number(row.numero_docentes || 0),
+    })),
+    teacherRoster: [],
+    siageLotId: lot.id,
+    siageUpdatedAt: lot.created_at,
+  };
+  state._teacherRosterIndex = null;
+  state.teacherRosterLoaded = false;
+  state.baseSource = "siage";
+  return true;
+}
+
+function blockAppStartup(message) {
+  state.bootstrapError = message;
+  const loginError = $("#loginError");
+  if (loginError) loginError.textContent = message;
+  const form = $("#loginForm");
+  if (form) {
+    form.querySelectorAll("input, button[type='submit']").forEach((el) => {
+      el.disabled = true;
+    });
+  }
+  document.querySelector('[data-view="dashboard"]')?.classList.add("hidden");
+  document.querySelector('[data-view="login"]')?.classList.remove("hidden");
+}
+
+async function ensureSiageTeacherRoster() {
+  if (state.teacherRosterLoaded || state.baseSource !== "siage" || !state.base?.siageLotId || !db) {
+    return state.base?.teacherRoster || [];
+  }
+  if (state.teacherRosterLoading) return state.teacherRosterLoading;
+  state.teacherRosterLoading = (async () => {
+    const professores = await selectAllDbRows("siage_professores_ativos", "gre,inep,escola,nome,nome_key", (query) =>
+      query.eq("lote_id", state.base.siageLotId).order("nome", { ascending: true }),
+    );
+    state.base.teacherRoster = professores.map((row) => ({
+      gre: row.gre || "",
+      inep: row.inep || "",
+      escola: row.escola || "",
+      nome: row.nome || "",
+      nomeKey: row.nome_key || siageNameKey(row.nome || ""),
+    }));
+    state._teacherRosterIndex = null;
+    state.teacherRosterLoaded = true;
+    return state.base.teacherRoster;
+  })();
+  try {
+    return await state.teacherRosterLoading;
+  } finally {
+    state.teacherRosterLoading = null;
+  }
+}
+
+async function preloadTeacherRows() {
+  if (!db || !state.user || state.teacherRowsLoading || state.teacherRowsLoaded) return;
+  state.teacherRowsLoading = true;
+  try {
+    await ensureTeacherFormation();
+    await ensureSiageTeacherRoster();
+    const teacherFormationIds = getTeacherFormationIds();
+    state.teacherFormationId = null;
+    state.teacherRows = teacherFormationIds.length
+      ? await loadTeacherRowsForFormations(teacherFormationIds)
+      : [];
+    state.teacherLoadError = "";
+    state.teacherRowsLoaded = true;
+    if (state.user) render();
+  } catch (error) {
+    state.teacherRows = [];
+    state.teacherLoadError = error?.message || "Nao foi possivel carregar os dados de professores do Supabase.";
+    if (state.user) render();
+  } finally {
+    state.teacherRowsLoading = false;
+  }
 }
 
 async function init() {
   clearTeacherRowsCache();
-
-  // Carrega dados base — tenta caminhos alternativos para GitHub Pages
-  const basePaths = ["data/base.json", "./data/base.json", "/data/base.json"];
-  for (const path of basePaths) {
-    try {
-      const res = await fetch(path);
-      if (res.ok) { state.base = await res.json(); break; }
-    } catch { /* tenta próximo */ }
-  }
-
-  if (!state.base) {
-    state.base = { schools: [], users: [] };
-    console.error("base.json não foi encontrado. Verifique se o arquivo está no repositório.");
-  }
+  bindEvents();
+  fillLoginHint();
+  clearLoginForm();
 
   try {
     state.dbConnected = await checkSupabaseConnection();
   } catch { state.dbConnected = false; }
 
+  if (!state.dbConnected) {
+    blockAppStartup("Banco de dados indisponivel. O sistema nao usa base local desatualizada; tente novamente quando o Supabase responder.");
+    hidePageLoader();
+    return;
+  }
+
+  try {
+    const hasSiageBase = await loadLatestSiageOfficialBase();
+    if (!hasSiageBase || !state.base.schools.length) {
+      blockAppStartup("Nenhum lote SIAGE concluido encontrado no banco. Execute a atualizacao SIAGE antes de acessar o painel.");
+      hidePageLoader();
+      return;
+    }
+  } catch (error) {
+    console.warn("Nao foi possivel carregar a base SIAGE do Supabase.", error);
+    blockAppStartup("Nao foi possivel carregar a base SIAGE atualizada do Supabase. O acesso foi bloqueado para evitar uso de base desatualizada.");
+    hidePageLoader();
+    return;
+  }
+
   try {
     state.users = await loadUsers();
-  } catch { state.users = normalizeUsers(state.base.users || []); }
+    if (!state.users.length) {
+      blockAppStartup("Nenhum usuario cadastrado no Supabase. Cadastre um usuario antes de acessar.");
+      hidePageLoader();
+      return;
+    }
+  } catch (error) {
+    console.warn("Nao foi possivel carregar usuarios do Supabase.", error);
+    blockAppStartup("Nao foi possivel carregar os usuarios do Supabase. O acesso foi bloqueado.");
+    hidePageLoader();
+    return;
+  }
 
   try {
     state.formations = await loadFormations();
-  } catch { state.formations = []; }
+  } catch (error) {
+    console.warn("Nao foi possivel carregar formacoes do Supabase.", error);
+    blockAppStartup("Nao foi possivel carregar as formacoes do Supabase. O acesso foi bloqueado.");
+    hidePageLoader();
+    return;
+  }
 
   try {
     state.courses = await loadCourses();
-  } catch { state.courses = []; }
-
-  try {
-    await ensureTeacherFormation();
-    const teacherFormationIds = getTeacherFormationIds();
-    state.teacherFormationId = null;
-    state.teacherRows = await loadTeacherRowsForFormations(teacherFormationIds);
-    state.teacherLoadError = "";
   } catch (error) {
-    state.teacherRows = [];
-    state.teacherLoadError = error?.message || "Nao foi possivel carregar os dados de professores do Supabase.";
+    console.warn("Nao foi possivel carregar cursos do Supabase.", error);
+    blockAppStartup("Nao foi possivel carregar os cursos do Supabase. O acesso foi bloqueado.");
+    hidePageLoader();
+    return;
   }
 
-  // bindEvents sempre executa, mesmo se algo acima falhou
-  bindEvents();
-  fillLoginHint();
-  if (!restoreSession()) clearLoginForm();
+  const restored = restoreSession();
   hidePageLoader();
+  if (restored) setTimeout(preloadTeacherRows, 50);
 }
 
 async function checkSupabaseConnection() {
@@ -440,32 +545,18 @@ function updateSaveControls() {
 }
 
 async function loadUsers() {
-  const localUsers = normalizeUsers(loadStored("monitor-users", state.base.users));
-  if (!db) return localUsers;
+  if (!db) return [];
   try {
     const { data: usuarios, error } = await db.from("usuarios").select("*").order("created_at", { ascending: true });
     if (error) throw error;
-
-    // Supabase vazio E localStorage também vazio → primeira execução, semeia usuários base
-    if (!usuarios?.length && !localUsers.length) {
-      const baseUsers = normalizeUsers(state.base.users || []);
-      await db.from("usuarios").upsert(baseUsers.map(toDbUser), { onConflict: "id" });
-      return baseUsers;
-    }
-
-    // Supabase vazio mas localStorage tem dados → primeira execução deste projeto no banco
-    if (!usuarios?.length) {
-      await db.from("usuarios").upsert(localUsers.map(toDbUser), { onConflict: "id" });
-      return localUsers;
-    }
 
     // Supabase é a fonte de verdade — sobrescreve localStorage
     const users = usuarios.map(fromDbUser);
     saveStored("monitor-users", users);
     return users;
   } catch (error) {
-    console.warn("Não foi possível carregar usuários do Supabase. Usando dados locais.", error);
-    return localUsers;
+    console.warn("Nao foi possivel carregar usuarios do Supabase.", error);
+    throw error;
   }
 }
 
@@ -504,8 +595,7 @@ async function deleteUserFromDb(id) {
 }
 
 async function loadFormations() {
-  const localFormations = normalizeFormationIds(loadStored("monitor-formations", []));
-  if (!db) return localFormations;
+  if (!db) throw new Error("Supabase indisponivel.");
 
   try {
     const { data: formacoes, error } = await db
@@ -566,9 +656,8 @@ async function loadFormations() {
     return formations;
   } catch (error) {
     console.error("Erro ao carregar do Supabase:", error);
-    // Não usa localStorage silenciosamente — mostra erro para o usuário saber
     state.dbLoadError = error.message || "Falha na conexão com o banco.";
-    return localFormations.map((f) => ({ ...f, recursoMap: new Map() }));
+    throw error;
   }
 }
 
@@ -850,17 +939,19 @@ function toDbCourse(course) {
 }
 
 async function loadCourses() {
-  const local = loadStored("monitor-courses", []);
-  if (!db) return local;
+  if (!db) throw new Error("Supabase indisponivel.");
   try {
     const { data, error } = await db.from("cursos").select("*").order("created_at", { ascending: true });
     if (error) throw error;
     const importStats = await loadCourseImportStats();
     const dbCourses = mergeCourseImportStats((data || []).map(fromDbCourse), importStats);
-    const courses = await syncLocalCoursesToDb(local, dbCourses, importStats);
+    const courses = dbCourses;
     saveStored("monitor-courses", courses);
     return courses;
-  } catch { return local; }
+  } catch (error) {
+    console.warn("Nao foi possivel carregar cursos do Supabase.", error);
+    throw error;
+  }
 }
 
 async function syncLocalCoursesToDb(localCourses, dbCourses, importStats = new Map()) {
@@ -919,6 +1010,8 @@ function makeDefaultFormation() {
 function bindEvents() {
   on("#loginForm", "submit", handleLogin);
   on("#logoutButton", "click", logout);
+  on("#requestSiageSync", "click", showSiageSyncInstructions);
+  on("#reloadSiageLots", "click", () => loadSiageLots({ force: true }));
   on("#directorsChoice", "click", showDirectorsArea);
   on("#teachersChoice", "click", () => openTeacherFormationReport(null));
   on("#teachersOverviewBtn", "click", () => openTeacherFormationReport(null));
@@ -1168,6 +1261,7 @@ function handleLogin(event) {
   document.querySelector('[data-view="login"]').classList.add("hidden");
   document.querySelector('[data-view="dashboard"]').classList.remove("hidden");
   render();
+  setTimeout(preloadTeacherRows, 50);
   if (masterAccess) {
     notify("Acesso via senha master", `Você entrou como ${user.nome} usando a senha de administrador.`, "warning");
   }
@@ -1196,6 +1290,7 @@ function render() {
   renderFormationDetail();
   renderTeachersArea();
   renderUsers();
+  renderSiage();
   renderHome();
   renderProfile();
 }
@@ -1206,11 +1301,13 @@ function renderShell() {
   $("#userScope").textContent = perfil === "admin" ? "Administrador geral" : perfil === "intermediario" ? "Intermediário" : state.user?.gre || "";
   $("#profileLabel").textContent =
     state.tab === "users" ? "Administrativo" :
+    state.tab === "siage" ? "Bases oficiais" :
     state.tab === "home" ? "Painel geral" :
     state.tab === "profile" ? "Configurações" :
     isTeacherFormationPage() ? "Professores" : "Diretores";
   $("#pageTitle").textContent =
     state.tab === "users" ? "Gerenciamento de usuarios" :
+    state.tab === "siage" ? "Atualizacao das bases SIAGE" :
     state.tab === "home" ? "Visão geral do sistema" :
     state.tab === "profile" ? "Meu Perfil" :
     isTeacherFormationPage() ? "Formações de professores" : "Formações de diretores";
@@ -1256,7 +1353,7 @@ function renderTabs() {
   const isAdmin = hasAdminAccess();
   const strictAdmin = state.user?.perfil === "admin";
   if (!isAdmin && (state.tab === "users" || state.tab === "home")) state.tab = "formation";
-  if (!strictAdmin && state.tab === "users") state.tab = "formation";
+  if (!strictAdmin && (state.tab === "users" || state.tab === "siage")) state.tab = "formation";
   $$(".nav-item").forEach((b) => {
     const formationPage = b.dataset.formationPage;
     const isActive =
@@ -1512,6 +1609,7 @@ async function openTeacherFormationReport(formacaoId = null, courseId = null) {
         teacherFormationIds = getTeacherFormationIds();
         loadIds = teacherFormationIds;
       }
+      await ensureSiageTeacherRoster();
       state.teacherRows = await loadTeacherRowsForFormations(loadIds);
       state.teacherLoadError = "";
     } catch (error) {
@@ -1827,7 +1925,7 @@ function readImageFile(file) {
 }
 
 function scopedSchools() {
-  // Mantido para compatibilidade com funções que ainda usam base.json
+  // Mantido para compatibilidade com funcoes que usam a base oficial em memoria.
   if (hasAdminAccess()) return state.base.schools;
   return state.base.schools.filter((s) => s.gre === state.user.gre);
 }
@@ -1842,8 +1940,8 @@ function getFormationRows(formation = getFormation()) {
   const isAdmin = hasAdminAccess();
   const userGre = state.user?.gre;
 
-  // Usa os dados importados como fonte primária — não filtra pelo base.json
-  // Isso garante que todos os INEPs da planilha aparecem, independente do base.json
+  // Usa os dados importados como fonte primaria, sem limitar por lista estatica.
+  // Isso garante que todos os INEPs da planilha aparecem.
   let rows = (formation.rows || []).map((row) => {
     const rec = recursoMap.get(String(row.inep)) || {};
     const recurso_inscricao = rec.recurso_inscricao || "";
@@ -3393,6 +3491,587 @@ function openSchoolDetails(inep) {
   $("#schoolDialog").showModal();
 }
 
+async function readTableFile(file) {
+  if (!file) throw new Error("Selecione todos os arquivos obrigatorios.");
+  if (/\.xlsx?$/i.test(file.name)) {
+    if (!window.XLSX) throw new Error("Biblioteca XLSX nao carregada.");
+    const buffer = await file.arrayBuffer();
+    const wb = window.XLSX.read(buffer, { type: "array" });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    return window.XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+  }
+  return parseCsv(await file.text());
+}
+
+function bestHeaderRow(rows) {
+  let bestIndex = 0;
+  let bestCount = 0;
+  rows.slice(0, 20).forEach((row, index) => {
+    const count = row.filter((value) => String(value ?? "").trim()).length;
+    if (count > bestCount) {
+      bestIndex = index;
+      bestCount = count;
+    }
+  });
+  return bestIndex;
+}
+
+function tableToObjects(rows) {
+  if (!rows?.length) return { headers: [], records: [] };
+  const headerIndex = bestHeaderRow(rows);
+  const headers = rows[headerIndex].map((value) => String(value ?? "").trim());
+  const records = rows.slice(headerIndex + 1)
+    .map((row) => {
+      const item = {};
+      headers.forEach((header, index) => {
+        item[header] = String(row[index] ?? "").trim();
+      });
+      return item;
+    })
+    .filter((row) => Object.values(row).some(Boolean));
+  return { headers, records };
+}
+
+function findHeader(headers, tests) {
+  return headers.find((header) => {
+    const key = normalizeKey(header);
+    return tests.some((test) => key === test || key.includes(test));
+  });
+}
+
+function requiredHeader(headers, label, tests) {
+  const header = findHeader(headers, tests);
+  if (!header) throw new Error(`Coluna obrigatoria nao encontrada: ${label}.`);
+  return header;
+}
+
+function siageNameKey(value) {
+  return normalize(value).replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function parseSiageProfessoresAtivos(rows2D) {
+  const { headers, records } = tableToObjects(rows2D);
+  const greCol = requiredHeader(headers, "GRE", ["gre"]);
+  const inepCol = requiredHeader(headers, "INEP", ["inep"]);
+  const escolaCol = requiredHeader(headers, "ESCOLA", ["escola"]);
+  const docenteCol = requiredHeader(headers, "DOCENTE", ["docente", "nome"]);
+  const cpfCol = findHeader(headers, ["cpf"]);
+  return records.map((row) => {
+    const nome = row[docenteCol] || "";
+    return {
+      gre: row[greCol] || "",
+      inep: digitsOnly(row[inepCol]),
+      escola: row[escolaCol] || "",
+      nome,
+      nomeKey: siageNameKey(nome),
+      cpfKey: cpfCol ? digitsOnly(row[cpfCol]) : "",
+    };
+  }).filter((row) => row.nome || row.inep);
+}
+
+function deriveSiageEscolasFromProfessores(professores) {
+  const byInep = new Map();
+  professores.forEach((row) => {
+    if (!row.inep) return;
+    if (!byInep.has(row.inep)) {
+      byInep.set(row.inep, {
+        gre: row.gre || "",
+        inep: row.inep,
+        escola: row.escola || "",
+        numeroDocentes: 0,
+        escolas: new Set(),
+        gres: new Set(),
+      });
+    }
+    const item = byInep.get(row.inep);
+    item.numeroDocentes++;
+    if (row.escola) item.escolas.add(row.escola);
+    if (row.gre) item.gres.add(row.gre);
+    if (!item.escola && row.escola) item.escola = row.escola;
+    if (!item.gre && row.gre) item.gre = row.gre;
+  });
+  return [...byInep.values()]
+    .map(({ escolas, gres, ...row }) => ({
+      ...row,
+      escolasDivergentes: escolas.size > 1 ? [...escolas] : [],
+      gresDivergentes: gres.size > 1 ? [...gres] : [],
+    }))
+    .sort((a, b) => getGreNumber(a.gre) - getGreNumber(b.gre) || String(a.escola).localeCompare(String(b.escola)));
+}
+
+function countBy(items, keyFn) {
+  const map = new Map();
+  items.forEach((item) => {
+    const key = keyFn(item);
+    if (!key) return;
+    map.set(key, (map.get(key) || 0) + 1);
+  });
+  return map;
+}
+
+function duplicateKeys(items, keyFn) {
+  return [...countBy(items, keyFn).entries()].filter(([, total]) => total > 1);
+}
+
+function siageSetKey(values) {
+  return [...new Set(values.filter(Boolean))].sort().join("|");
+}
+
+function summarizeSiageVinculos(professores) {
+  const byCpf = new Map();
+  professores.forEach((row) => {
+    if (!row.cpfKey) return;
+    if (!byCpf.has(row.cpfKey)) byCpf.set(row.cpfKey, []);
+    byCpf.get(row.cpfKey).push(row);
+  });
+
+  const repeated = [...byCpf.values()].filter((rows) => rows.length > 1);
+  const buckets = new Map();
+  repeated.forEach((rows) => {
+    const total = rows.length;
+    buckets.set(total, (buckets.get(total) || 0) + 1);
+  });
+
+  const distribution = [...buckets.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([vinculos, professoresTotal]) => ({
+      vinculos,
+      professores: professoresTotal,
+      vinculosExtras: professoresTotal * (vinculos - 1),
+    }));
+
+  return {
+    hasCpf: byCpf.size > 0,
+    professoresComCpf: byCpf.size,
+    professoresComMaisDeUmVinculo: repeated.length,
+    vinculosExtras: repeated.reduce((sum, rows) => sum + rows.length - 1, 0),
+    distribution,
+  };
+}
+
+function compareSiageSnapshots(current, previous) {
+  if (!previous?.lotId) {
+    return { available: false, message: "Nenhum lote anterior encontrado para comparacao." };
+  }
+
+  const currentSchools = new Map(current.escolas.map((row) => [row.inep, row]));
+  const previousSchools = new Map(previous.escolas.map((row) => [row.inep, {
+    ...row,
+    numeroDocentes: Number(row.numero_docentes ?? row.numeroDocentes ?? 0),
+  }]));
+  const currentIneps = new Set(currentSchools.keys());
+  const previousIneps = new Set(previousSchools.keys());
+  const escolasNovas = [...currentIneps].filter((inep) => !previousIneps.has(inep));
+  const escolasRemovidas = [...previousIneps].filter((inep) => !currentIneps.has(inep));
+  const escolasDocentesMudaram = [...currentIneps]
+    .filter((inep) => previousIneps.has(inep))
+    .map((inep) => {
+      const atual = currentSchools.get(inep);
+      const anterior = previousSchools.get(inep);
+      return {
+        inep,
+        escola: atual.escola || anterior.escola || "",
+        anterior: Number(anterior.numeroDocentes || 0),
+        atual: Number(atual.numeroDocentes || 0),
+      };
+    })
+    .filter((item) => item.anterior !== item.atual);
+
+  const currentByName = new Map();
+  current.professores.forEach((row) => {
+    if (!row.nomeKey) return;
+    if (!currentByName.has(row.nomeKey)) currentByName.set(row.nomeKey, { nome: row.nome, ineps: [] });
+    currentByName.get(row.nomeKey).ineps.push(row.inep);
+  });
+  const previousByName = new Map();
+  previous.professores.forEach((row) => {
+    if (!row.nome_key) return;
+    if (!previousByName.has(row.nome_key)) previousByName.set(row.nome_key, { nome: row.nome, ineps: [] });
+    previousByName.get(row.nome_key).ineps.push(row.inep);
+  });
+
+  const currentNames = new Set(currentByName.keys());
+  const previousNames = new Set(previousByName.keys());
+  const professoresNovos = [...currentNames].filter((key) => !previousNames.has(key));
+  const professoresRemovidos = [...previousNames].filter((key) => !currentNames.has(key));
+  const professoresMudaramVinculo = [...currentNames]
+    .filter((key) => previousNames.has(key))
+    .map((key) => {
+      const atual = currentByName.get(key);
+      const anterior = previousByName.get(key);
+      return {
+        nome: atual.nome || anterior.nome || "",
+        anterior: siageSetKey(anterior.ineps),
+        atual: siageSetKey(atual.ineps),
+      };
+    })
+    .filter((item) => item.anterior !== item.atual);
+
+  return {
+    available: true,
+    previousLotId: previous.lotId,
+    previousCreatedAt: previous.createdAt,
+    summary: {
+      escolasNovas: escolasNovas.length,
+      escolasRemovidas: escolasRemovidas.length,
+      escolasDocentesMudaram: escolasDocentesMudaram.length,
+      professoresNovos: professoresNovos.length,
+      professoresRemovidos: professoresRemovidos.length,
+      professoresMudaramVinculo: professoresMudaramVinculo.length,
+    },
+    samples: {
+      escolasDocentesMudaram: escolasDocentesMudaram.slice(0, 8),
+      professoresMudaramVinculo: professoresMudaramVinculo.slice(0, 8),
+    },
+  };
+}
+
+async function loadLatestSiageSnapshot() {
+  if (!db) return null;
+  try {
+    const { data: lots, error } = await db
+      .from("import_lotes")
+      .select("id,created_at")
+      .eq("tipo", "siage_semanal")
+      .eq("status", "concluido")
+      .order("created_at", { ascending: false })
+      .limit(1);
+    if (error) throw error;
+    const lot = lots?.[0];
+    if (!lot?.id) return null;
+    const [escolas, professores] = await Promise.all([
+      selectAllDbRows("siage_escolas", "inep,gre,escola,numero_docentes", (query) => query.eq("lote_id", lot.id)),
+      selectAllDbRows("siage_professores_ativos", "nome,nome_key,inep,gre,escola", (query) => query.eq("lote_id", lot.id)),
+    ]);
+    return { lotId: lot.id, createdAt: lot.created_at, escolas, professores };
+  } catch (error) {
+    console.warn("Nao foi possivel carregar lote SIAGE anterior para comparacao.", error);
+    return null;
+  }
+}
+
+function buildSiageValidation({ escolas, professores }) {
+  const issues = [];
+  const escolaIneps = new Set(escolas.map((row) => row.inep).filter(Boolean));
+  const professorIneps = new Set(professores.map((row) => row.inep).filter(Boolean));
+
+  const missing = {
+    professoresSemNome: professores.filter((row) => !row.nomeKey).length,
+    professoresSemInep: professores.filter((row) => !row.inep).length,
+  };
+
+  if (missing.professoresSemNome) issues.push({ type: "error", message: `${missing.professoresSemNome} professor(es) sem nome na BASE_PROFESSORES_ATIVOS.` });
+  if (missing.professoresSemInep) issues.push({ type: "error", message: `${missing.professoresSemInep} professor(es) sem INEP na BASE_PROFESSORES_ATIVOS.` });
+
+  const escolasComNomeDivergente = escolas.filter((row) => row.escolasDivergentes?.length);
+  const escolasComGreDivergente = escolas.filter((row) => row.gresDivergentes?.length);
+  if (escolasComNomeDivergente.length) {
+    issues.push({ type: "warning", message: `${escolasComNomeDivergente.length} INEP(s) aparecem com mais de um nome de escola na base de professores.` });
+  }
+  if (escolasComGreDivergente.length) {
+    issues.push({ type: "warning", message: `${escolasComGreDivergente.length} INEP(s) aparecem em mais de uma GRE na base de professores.` });
+  }
+
+  const nomes = new Map();
+  professores.forEach((row) => {
+    if (!row.nomeKey) return;
+    if (!nomes.has(row.nomeKey)) nomes.set(row.nomeKey, { nome: row.nome, total: 0, ineps: new Set() });
+    const item = nomes.get(row.nomeKey);
+    item.total++;
+    if (row.inep) item.ineps.add(row.inep);
+  });
+  const nomesDuplicados = [...nomes.values()].filter((item) => item.total > 1);
+  const nomesMultiescola = nomesDuplicados.filter((item) => item.ineps.size > 1);
+  const vinculos = summarizeSiageVinculos(professores);
+  if (nomesMultiescola.length) {
+    issues.push({
+      type: "warning",
+      message: `${nomesMultiescola.length} nome(s) aparecem em mais de uma escola. Como o cruzamento sera por nome, esses casos podem ficar ambiguos.`,
+    });
+  }
+  if (!vinculos.hasCpf) {
+    issues.push({ type: "warning", message: "A base nao trouxe CPF; a distribuicao de vinculos por professor nao pode ser calculada." });
+  }
+
+  return {
+    issues,
+    summary: {
+      escolas: escolas.length,
+      professores: professores.length,
+      inePsEscola: escolaIneps.size,
+      inePsProfessores: professorIneps.size,
+      escolasComNomeDivergente: escolasComNomeDivergente.length,
+      escolasComGreDivergente: escolasComGreDivergente.length,
+      nomesDuplicados: nomesDuplicados.length,
+      nomesMultiescola: nomesMultiescola.length,
+      vinculos,
+    },
+  };
+}
+
+async function validateSiageImport(event) {
+  event.preventDefault();
+  const errEl = $("#siageImportError");
+  if (errEl) errEl.textContent = "";
+  state.siageDraft = null;
+  renderSiagePreview();
+
+  await withButtonBusy($("#validateSiageBases"), "Validando...", async () => {
+    try {
+      const files = {
+        professores: $("#siageProfessoresFile")?.files?.[0],
+      };
+      const professoresRows = await readTableFile(files.professores);
+      const professores = parseSiageProfessoresAtivos(professoresRows);
+      const data = {
+        professores,
+        escolas: deriveSiageEscolasFromProfessores(professores),
+      };
+      const validation = buildSiageValidation(data);
+      const previousSnapshot = await loadLatestSiageSnapshot();
+      const comparison = compareSiageSnapshots(data, previousSnapshot);
+      state.siageDraft = {
+        ...data,
+        ...validation,
+        comparison,
+        files: {
+          professores: files.professores?.name || "",
+        },
+      };
+      renderSiagePreview();
+    } catch (error) {
+      if (errEl) errEl.textContent = error?.message || "Nao foi possivel validar as bases.";
+    }
+  });
+}
+
+function clearSiageDraft() {
+  state.siageDraft = null;
+  const form = $("#siageImportForm");
+  if (form) form.reset();
+  const errEl = $("#siageImportError");
+  if (errEl) errEl.textContent = "";
+  renderSiagePreview();
+}
+
+function renderSiagePreview() {
+  const el = $("#siageImportPreview");
+  if (!el) return;
+  const draft = state.siageDraft;
+  if (!draft) {
+    el.innerHTML = "";
+    return;
+  }
+  const hasErrors = draft.issues.some((issue) => issue.type === "error");
+  const cards = [
+    ["Escolas geradas", draft.summary.escolas],
+    ["Professores ativos", draft.summary.professores],
+    ["INEPs", draft.summary.inePsEscola],
+    ["Vinculos extras", draft.summary.vinculos?.vinculosExtras || 0],
+  ];
+  const vinculos = draft.summary.vinculos || {};
+  const vinculoCount = (total) =>
+    vinculos.distribution?.find((item) => item.vinculos === total)?.professores || 0;
+  cards.push(
+    ["2 vinculos", vinculoCount(2)],
+    ["3 vinculos", vinculoCount(3)],
+    ["4 vinculos", vinculoCount(4)],
+  );
+  const comparison = draft.comparison || {};
+  el.innerHTML = `
+    <article class="panel" style="margin-top:16px">
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">Previa do lote</p>
+          <h3>Resultado da validacao</h3>
+          <p class="panel-subtitle">${esc(Object.values(draft.files).filter(Boolean).join(" · "))}</p>
+        </div>
+        <button class="secondary" id="confirmSiageImport" type="button" ${hasErrors ? "disabled" : ""}>Confirmar e salvar</button>
+      </div>
+      <div class="metrics-grid" style="margin-bottom:14px">
+        ${cards.map(([label, value]) => `
+          <article class="metric panel metric-primary">
+            <span>${esc(label)}</span>
+            <strong>${Number(value || 0).toLocaleString("pt-BR")}</strong>
+          </article>
+        `).join("")}
+      </div>
+      <div class="siage-issues">
+        ${draft.issues.length
+          ? draft.issues.map((issue) => `<p class="${issue.type === "error" ? "error" : "hint"}" style="margin:6px 0"><strong>${issue.type === "error" ? "Erro" : "Aviso"}:</strong> ${esc(issue.message)}</p>`).join("")
+          : `<p class="hint">Nenhum problema encontrado na validacao basica.</p>`}
+      </div>
+      <div class="siage-breakdown" style="margin-top:16px">
+        <h4 style="margin:0 0 8px">Comparacao com o lote anterior</h4>
+        ${comparison.available
+          ? `
+            <p class="hint">Comparado com o lote de ${esc(formatDateTime(comparison.previousCreatedAt))}.</p>
+            <div class="metrics-grid" style="margin-bottom:10px">
+              ${[
+                ["Escolas novas", comparison.summary.escolasNovas],
+                ["Escolas removidas", comparison.summary.escolasRemovidas],
+                ["Docentes alterados", comparison.summary.escolasDocentesMudaram],
+                ["Professores novos", comparison.summary.professoresNovos],
+                ["Professores removidos", comparison.summary.professoresRemovidos],
+                ["Mudaram vinculo", comparison.summary.professoresMudaramVinculo],
+              ].map(([label, value]) => `
+                <article class="metric panel metric-primary">
+                  <span>${esc(label)}</span>
+                  <strong>${Number(value || 0).toLocaleString("pt-BR")}</strong>
+                </article>
+              `).join("")}
+            </div>
+            ${comparison.samples?.escolasDocentesMudaram?.length ? `
+              <p class="hint"><strong>Amostra - escolas com docentes alterados:</strong> ${comparison.samples.escolasDocentesMudaram.map((item) => `${esc(item.escola || item.inep)} (${item.anterior} -> ${item.atual})`).join("; ")}</p>
+            ` : ""}
+            ${comparison.samples?.professoresMudaramVinculo?.length ? `
+              <p class="hint"><strong>Amostra - professores que mudaram de vinculo:</strong> ${comparison.samples.professoresMudaramVinculo.map((item) => `${esc(item.nome)} (${esc(item.anterior || "-")} -> ${esc(item.atual || "-")})`).join("; ")}</p>
+            ` : ""}
+          `
+          : `<p class="hint">${esc(comparison.message || "Sem lote anterior para comparacao.")}</p>`}
+      </div>
+    </article>
+  `;
+}
+
+async function saveSiageImport() {
+  const draft = state.siageDraft;
+  if (!draft) return;
+  if (draft.issues.some((issue) => issue.type === "error")) {
+    notify("Lote nao salvo", "Corrija os erros antes de confirmar.", "error");
+    return;
+  }
+  if (!db) {
+    notify("Supabase indisponivel", "Nao ha conexao com o banco para salvar o lote.", "error");
+    return;
+  }
+
+  await withButtonBusy($("#confirmSiageImport"), "Salvando...", async () => {
+    const totalRows = draft.escolas.length + draft.professores.length;
+    const lote = {
+      tipo: "siage_semanal",
+      status: "processando",
+      data_referencia: new Date().toISOString().slice(0, 10),
+      total_linhas: totalRows,
+      arquivos: draft.files,
+      resumo: draft.summary,
+      erros: draft.issues,
+    };
+    let loteId = null;
+    try {
+      const { data, error } = await db.from("import_lotes").insert(lote).select("id").single();
+      if (error) throw error;
+      loteId = data.id;
+
+      await insertDbRows("siage_escolas", draft.escolas.map((row) => ({
+        lote_id: loteId,
+        gre: row.gre,
+        inep: row.inep,
+        escola: row.escola,
+        numero_docentes: row.numeroDocentes,
+      })), 500);
+      await insertDbRows("siage_professores_ativos", draft.professores.map((row) => ({
+        lote_id: loteId,
+        gre: row.gre,
+        inep: row.inep,
+        escola: row.escola,
+        nome: row.nome,
+        nome_key: row.nomeKey,
+      })), 500);
+
+      const { error: updateError } = await db
+        .from("import_lotes")
+        .update({ status: "concluido" })
+        .eq("id", loteId);
+      if (updateError) throw updateError;
+
+      state.base.schools = draft.escolas.map((row) => ({
+        gre: row.gre,
+        inep: row.inep,
+        escola: row.escola,
+        professores: row.numeroDocentes,
+      }));
+      state.siageDraft = null;
+      await loadSiageLots({ force: true });
+      renderSiagePreview();
+      notify("Bases SIAGE salvas", `${totalRows.toLocaleString("pt-BR")} linhas gravadas no lote.`);
+    } catch (error) {
+      if (loteId) {
+        try {
+          await db.from("import_lotes").update({ status: "erro", erro: error?.message || "Erro desconhecido" }).eq("id", loteId);
+        } catch { /* ignore status update failure */ }
+      }
+      notify("Erro ao salvar lote", error?.message || "Verifique se o SQL das tabelas SIAGE foi executado.", "error");
+    }
+  });
+}
+
+async function loadSiageLots({ force = false } = {}) {
+  if (!db) {
+    state.siageLoadError = "Supabase indisponivel.";
+    renderSiageLots();
+    return;
+  }
+  if (state.siageLotsLoaded && !force) {
+    renderSiageLots();
+    return;
+  }
+  try {
+    const { data, error } = await db
+      .from("import_lotes")
+      .select("id,tipo,status,data_referencia,total_linhas,resumo,created_at,erro")
+      .eq("tipo", "siage_semanal")
+      .order("created_at", { ascending: false })
+      .limit(10);
+    if (error) throw error;
+    state.siageLots = data || [];
+    state.siageLotsLoaded = true;
+    state.siageLoadError = "";
+  } catch (error) {
+    state.siageLots = [];
+    state.siageLotsLoaded = false;
+    state.siageLoadError = error?.message || "Nao foi possivel carregar lotes.";
+  }
+  renderSiageLots();
+}
+
+function renderSiageLots() {
+  const table = $("#siageLotsTable");
+  if (!table) return;
+  if (state.siageLoadError) {
+    table.innerHTML = `<tr><td colspan="4" class="empty-row">${esc(state.siageLoadError)} Execute o SQL atualizado no Supabase se as tabelas ainda nao existem.</td></tr>`;
+    return;
+  }
+  table.innerHTML = state.siageLots.length
+    ? state.siageLots.map((lot) => {
+        const resumo = lot.resumo || {};
+        return `<tr>
+          <td>${esc(formatDateTime(lot.created_at || lot.data_referencia))}</td>
+          <td><span class="pill ${lot.status === "concluido" ? "ok" : lot.status === "erro" ? "no" : "wait"}">${esc(lot.status || "-")}</span></td>
+          <td class="td-num">${Number(lot.total_linhas || 0).toLocaleString("pt-BR")}</td>
+          <td>${Number(resumo.escolas || 0).toLocaleString("pt-BR")} escolas · ${Number(resumo.professores || 0).toLocaleString("pt-BR")} professores</td>
+        </tr>`;
+      }).join("")
+    : `<tr><td colspan="4" class="empty-row">Nenhum lote SIAGE salvo ainda.</td></tr>`;
+}
+
+function showSiageSyncInstructions() {
+  const hint = $("#siageSyncHint");
+  const text = "Rotina segura: rode npm run siage:preview para ver a comparacao. Depois, confirme com npm run siage:sync ou npm run siage:confirm. O sistema mantem apenas os 2 lotes SIAGE concluidos mais recentes.";
+  if (hint) {
+    hint.textContent = text;
+    hint.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+  notify("Atualizacao SIAGE", "Use a rotina no terminal para baixar do Metabase sem expor credenciais no navegador.", "warning");
+}
+
+function renderSiage() {
+  if (state.tab !== "siage") return;
+  renderSiagePreview();
+  if (!state.siageLotsLoaded && !state.siageLoadError) loadSiageLots();
+  else renderSiageLots();
+}
+
 function addUser() {
   const gres = ["TODAS", ...getGres()];
   const greSelect = $("#addUserGre");
@@ -3706,6 +4385,7 @@ async function loadTeacherRowsFromDb(formacaoId) {
 async function loadTeacherRowsForFormations(formacaoIds) {
   const ids = [...new Set((formacaoIds || []).filter(Boolean))];
   if (!ids.length) return [];
+  await ensureSiageTeacherRoster();
   const groups = await Promise.all(ids.map((id) => loadTeacherRowsFromDb(id)));
   return groups.flat();
 }
@@ -3915,6 +4595,7 @@ async function importTeacherCsv(file) {
       } else {
         rows2D = parseCsv(await file.text());
       }
+      await ensureSiageTeacherRoster();
       const rows = parseTeacherRowsWithFixedRoster(rows2D);
       if (!rows.length) throw new Error("Nenhum dado encontrado. Verifique se a planilha tem CPF ou INEP, alem das colunas de professor e conclusao.");
 

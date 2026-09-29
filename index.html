@@ -10,26 +10,13 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=62" />
+    <link rel="stylesheet" href="styles.css?v=64" />
   </head>
   <body>
     <!-- LOADER -->
     <div id="pageLoader" role="status" aria-label="Carregando">
-      <div class="pl-inner">
-        <div class="pl-orb" aria-hidden="true"></div>
-        <section class="pl-logo-wrap">
-          <div class="pl-ring" aria-hidden="true"></div>
-          <svg viewBox="0 0 400 400" aria-hidden="true">
-            <g class="pl-logo-group">
-              <path pathLength="1" class="pl-ghost-path"
-                d="M306 274 L306 176 L200 115 L94 176 L200 237 L256 205 L256 283 A56 40 0 0 1 144 283 L144 205 L200 237 L306 176" />
-              <path pathLength="1" class="pl-draw-path"
-                d="M306 274 L306 176 L200 115 L94 176 L200 237 L256 205 L256 283 A56 40 0 0 1 144 283 L144 205 L200 237 L306 176" />
-            </g>
-          </svg>
-        </section>
-        <div class="pl-text">Carregando<span>.</span><span>.</span><span>.</span></div>
-        <div class="pl-progress" aria-hidden="true"><div></div></div>
+      <div class="pl-inner simple">
+        <div class="pl-spinner" aria-hidden="true"></div>
       </div>
     </div>
 
@@ -157,6 +144,10 @@
               <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
               Usuários
             </button>
+            <button class="nav-item strict-admin-only" data-tab="siage">
+              <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l3-3 3 2 5-6"/><path d="M18 7h-5"/></svg>
+              Bases SIAGE
+            </button>
           </nav>
 
           <div class="sidebar-bottom">
@@ -226,6 +217,53 @@
           <!-- HOME (admin) -->
           <section class="tab-panel hidden" data-panel="home">
             <div id="homeDashboard"></div>
+          </section>
+
+          <!-- BASES SIAGE -->
+          <section class="tab-panel hidden" data-panel="siage">
+            <div class="section-title row-title">
+              <div>
+                <p class="eyebrow">Atualizacao semanal</p>
+                <h3>Bases oficiais SIAGE</h3>
+              </div>
+            </div>
+
+            <article class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Rotina automatizada</p>
+                  <h3>Base oficial sincronizada pelo robô</h3>
+                  <p class="panel-subtitle">O lote SIAGE vigente vem do Metabase e alimenta a base de escolas/professores usada pelo painel.</p>
+                </div>
+              </div>
+            </article>
+
+            <article class="panel" style="margin-top:16px">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Historico</p>
+                  <h3>Ultimos lotes salvos</h3>
+                </div>
+                <div class="form-actions" style="margin:0">
+                  <button class="secondary" id="requestSiageSync" type="button">Nova atualização</button>
+                  <button class="secondary" id="reloadSiageLots" type="button">Atualizar histórico</button>
+                </div>
+              </div>
+              <p class="hint" id="siageSyncHint"></p>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Data</th>
+                      <th>Status</th>
+                      <th>Linhas</th>
+                      <th>Resumo</th>
+                    </tr>
+                  </thead>
+                  <tbody id="siageLotsTable"></tbody>
+                </table>
+              </div>
+            </article>
           </section>
 
           <!-- FORMAÇÕES -->
@@ -1160,6 +1198,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
-    <script src="app.js?v=75"></script>
+    <script src="app.js?v=80"></script>
   </body>
 </html>

@@ -216,3 +216,90 @@ create index if not exists professor_dados_curso_id_idx
 -- Adiciona trilha em cursos
 alter table public.cursos
   add column if not exists trilha text not null default '';
+
+-- ─── LOTES E BASES SIAGE ─────────────────────────────────────────────────────
+create table if not exists public.import_lotes (
+  id uuid primary key default gen_random_uuid(),
+  tipo text not null default '',
+  status text not null default 'processando',
+  data_referencia date,
+  total_linhas integer not null default 0,
+  arquivos jsonb not null default '{}',
+  resumo jsonb not null default '{}',
+  erros jsonb not null default '[]',
+  erro text not null default '',
+  created_at timestamptz not null default now()
+);
+
+create index if not exists import_lotes_tipo_created_at_idx
+  on public.import_lotes (tipo, created_at desc);
+
+create table if not exists public.siage_escolas (
+  id uuid primary key default gen_random_uuid(),
+  lote_id uuid not null references public.import_lotes(id) on delete cascade,
+  gre text not null default '',
+  inep text not null default '',
+  escola text not null default '',
+  numero_docentes integer not null default 0,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists siage_escolas_lote_id_idx
+  on public.siage_escolas (lote_id);
+
+create index if not exists siage_escolas_lote_inep_idx
+  on public.siage_escolas (lote_id, inep);
+
+create table if not exists public.siage_professores_ativos (
+  id uuid primary key default gen_random_uuid(),
+  lote_id uuid not null references public.import_lotes(id) on delete cascade,
+  gre text not null default '',
+  inep text not null default '',
+  escola text not null default '',
+  nome text not null default '',
+  nome_key text not null default '',
+  created_at timestamptz not null default now()
+);
+
+create index if not exists siage_professores_ativos_lote_id_idx
+  on public.siage_professores_ativos (lote_id);
+
+create index if not exists siage_professores_ativos_lote_nome_idx
+  on public.siage_professores_ativos (lote_id, nome_key);
+
+create index if not exists siage_professores_ativos_lote_inep_idx
+  on public.siage_professores_ativos (lote_id, inep);
+
+alter table public.import_lotes enable row level security;
+alter table public.siage_escolas enable row level security;
+alter table public.siage_professores_ativos enable row level security;
+
+drop policy if exists "Ler lotes publicamente" on public.import_lotes;
+drop policy if exists "Inserir lotes publicamente" on public.import_lotes;
+drop policy if exists "Atualizar lotes publicamente" on public.import_lotes;
+drop policy if exists "Excluir lotes publicamente" on public.import_lotes;
+
+create policy "Ler lotes publicamente" on public.import_lotes for select using (true);
+create policy "Inserir lotes publicamente" on public.import_lotes for insert with check (true);
+create policy "Atualizar lotes publicamente" on public.import_lotes for update using (true) with check (true);
+create policy "Excluir lotes publicamente" on public.import_lotes for delete using (true);
+
+drop policy if exists "Ler siage escolas publicamente" on public.siage_escolas;
+drop policy if exists "Inserir siage escolas publicamente" on public.siage_escolas;
+drop policy if exists "Atualizar siage escolas publicamente" on public.siage_escolas;
+drop policy if exists "Excluir siage escolas publicamente" on public.siage_escolas;
+
+create policy "Ler siage escolas publicamente" on public.siage_escolas for select using (true);
+create policy "Inserir siage escolas publicamente" on public.siage_escolas for insert with check (true);
+create policy "Atualizar siage escolas publicamente" on public.siage_escolas for update using (true) with check (true);
+create policy "Excluir siage escolas publicamente" on public.siage_escolas for delete using (true);
+
+drop policy if exists "Ler siage professores publicamente" on public.siage_professores_ativos;
+drop policy if exists "Inserir siage professores publicamente" on public.siage_professores_ativos;
+drop policy if exists "Atualizar siage professores publicamente" on public.siage_professores_ativos;
+drop policy if exists "Excluir siage professores publicamente" on public.siage_professores_ativos;
+
+create policy "Ler siage professores publicamente" on public.siage_professores_ativos for select using (true);
+create policy "Inserir siage professores publicamente" on public.siage_professores_ativos for insert with check (true);
+create policy "Atualizar siage professores publicamente" on public.siage_professores_ativos for update using (true) with check (true);
+create policy "Excluir siage professores publicamente" on public.siage_professores_ativos for delete using (true);

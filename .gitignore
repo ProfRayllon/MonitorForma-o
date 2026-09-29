@@ -12,9 +12,13 @@ __pycache__/
 dist/
 build/
 
+# Node
+node_modules/
+
 # Editor
 .vscode/
 .idea/
+.claude/
 *.suo
 *.user
 
@@ -32,3 +36,8 @@ build/
 *professor*.xlsx
 *professores*.xlsx
 *status*.xlsx
+
+# Credenciais locais
+.env
+.env.*
+!.env.example
