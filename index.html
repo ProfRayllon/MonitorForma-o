@@ -122,29 +122,32 @@
               <strong>MonitorFormação</strong>
               <small id="userScope">GRE</small>
             </div>
+            <button class="sidebar-collapse" id="sidebarCollapse" type="button" aria-label="Recolher menu" title="Recolher menu">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            </button>
           </div>
 
           <nav class="sidebar-nav">
             <span class="nav-group-label admin-only">Principal</span>
-            <button class="nav-item admin-only" data-tab="home">
+            <button class="nav-item admin-only" data-tab="home" title="Início">
               <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
               Início
             </button>
             <span class="nav-group-label">Formações</span>
-            <button class="nav-item active" data-tab="formation" data-formation-page="directors">
+            <button class="nav-item active" data-tab="formation" data-formation-page="directors" title="Diretores">
               <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
               Diretores
             </button>
-            <button class="nav-item" data-tab="formation" data-formation-page="teachers">
+            <button class="nav-item" data-tab="formation" data-formation-page="teachers" title="Professores">
               <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
               Professores
             </button>
             <span class="nav-group-label strict-admin-only">Administrativo</span>
-            <button class="nav-item strict-admin-only" data-tab="users">
+            <button class="nav-item strict-admin-only" data-tab="users" title="Usuários">
               <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
               Usuários
             </button>
-            <button class="nav-item strict-admin-only" data-tab="siage">
+            <button class="nav-item strict-admin-only" data-tab="siage" title="Bases SIAGE">
               <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l3-3 3 2 5-6"/><path d="M18 7h-5"/></svg>
               Bases SIAGE
             </button>
@@ -155,11 +158,11 @@
               <div class="sidebar-user" id="sidebarUser"></div>
               <div class="db-status-badge" id="dbStatusBadge"></div>
             </div>
-            <button class="nav-item" data-tab="profile">
+            <button class="nav-item" data-tab="profile" title="Meu Perfil">
               <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
               Meu Perfil
             </button>
-            <button class="ghost-button" id="logoutButton">
+            <button class="ghost-button" id="logoutButton" title="Sair do sistema">
               <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
               Sair do sistema
             </button>
@@ -193,9 +196,9 @@
             <div class="topbar-actions teachers-top-actions hidden" id="teachersTopActions">
               <button class="secondary" id="teachersOverviewBtn" type="button">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
-                Visão geral
+                <span id="teachersOverviewLabel">Visão geral</span>
               </button>
-              <button class="secondary" id="teachersFormationsBtn" type="button">
+              <button class="secondary admin-only" id="teachersFormationsBtn" type="button">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
                 Formações
               </button>
@@ -203,7 +206,7 @@
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
                 Cursos
               </button>
-              <button class="secondary" id="reloadTeacherListBtn" type="button">
+              <button class="secondary admin-only" id="reloadTeacherListBtn" type="button">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
                 Atualizar dados
               </button>

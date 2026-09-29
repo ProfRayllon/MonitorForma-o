@@ -5,6 +5,7 @@ const state = {
   user: null,
   dbConnected: false,
   bootstrapError: "",
+  sidebarCollapsed: false,
   tab: "formation",
   formationMode: "directors",
   directorView: "overview",
@@ -75,6 +76,7 @@ const SUPABASE_URL = "https://intswvnfmizbttlrqhdt.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_XwPyaNxJ1BFTplBsTRmOLQ_wBOp1OUm";
 const db = window.supabase?.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) || null;
 const SESSION_KEY = "monitor-current-user";
+const SIDEBAR_COLLAPSED_KEY = "monitor-sidebar-collapsed";
 const DB_PAGE_SIZE = 1000;
 const TABLE_PAGE_SIZE = 10;
 
@@ -353,6 +355,8 @@ async function preloadTeacherRows() {
 
 async function init() {
   clearTeacherRowsCache();
+  state.sidebarCollapsed = loadStored(SIDEBAR_COLLAPSED_KEY, "auto") !== "pinned";
+  applySidebarCollapsed();
   bindEvents();
   fillLoginHint();
   clearLoginForm();
@@ -1007,9 +1011,23 @@ function makeDefaultFormation() {
   };
 }
 
+function applySidebarCollapsed() {
+  $(".dashboard")?.classList.toggle("sidebar-collapsed", state.sidebarCollapsed);
+  const btn = $("#sidebarCollapse");
+  if (!btn) return;
+  const label = state.sidebarCollapsed ? "Fixar menu aberto" : "Recolher menu";
+  btn.title = label;
+  btn.setAttribute("aria-label", label);
+}
+
 function bindEvents() {
   on("#loginForm", "submit", handleLogin);
   on("#logoutButton", "click", logout);
+  on("#sidebarCollapse", "click", () => {
+    state.sidebarCollapsed = !state.sidebarCollapsed;
+    saveStored(SIDEBAR_COLLAPSED_KEY, state.sidebarCollapsed ? "auto" : "pinned");
+    applySidebarCollapsed();
+  });
   on("#requestSiageSync", "click", showSiageSyncInstructions);
   on("#reloadSiageLots", "click", () => loadSiageLots({ force: true }));
   on("#directorsChoice", "click", showDirectorsArea);
@@ -1662,6 +1680,7 @@ function renderFormationMode() {
   const showCourseForm = isAdmin && state.courseAdminFormView === "form" && state.formationMode === "teachers-list";
   $("#directorsTopActions")?.classList.toggle("hidden", !isDirectors);
   $("#teachersTopActions")?.classList.toggle("hidden", !isTeachers);
+  $("#teachersOverviewLabel").textContent = isAdmin ? "Visão geral" : "Dashboard";
   $("#teachersOverviewBtn")?.classList.toggle("active", state.formationMode === "teachers" && !state.teacherFormationId);
   $("#teachersFormationsBtn")?.classList.toggle("active", state.formationMode === "teachers-list" || (state.formationMode === "teachers" && Boolean(state.teacherFormationId)));
   $("#teachersCoursesBtn")?.classList.toggle("active", state.formationMode === "courses");
