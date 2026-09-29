@@ -6,7 +6,6 @@ const state = {
   dbConnected: false,
   bootstrapError: "",
   sidebarCollapsed: false,
-  theme: "dark",
   tab: "formation",
   formationMode: "directors",
   directorView: "overview",
@@ -78,7 +77,6 @@ const SUPABASE_ANON_KEY = "sb_publishable_XwPyaNxJ1BFTplBsTRmOLQ_wBOp1OUm";
 const db = window.supabase?.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) || null;
 const SESSION_KEY = "monitor-current-user";
 const SIDEBAR_COLLAPSED_KEY = "monitor-sidebar-collapsed";
-const THEME_KEY = "monitor-theme";
 const DB_PAGE_SIZE = 1000;
 const TABLE_PAGE_SIZE = 10;
 
@@ -359,8 +357,7 @@ async function init() {
   clearTeacherRowsCache();
   state.sidebarCollapsed = loadStored(SIDEBAR_COLLAPSED_KEY, "collapsed") !== "expanded";
   applySidebarCollapsed();
-  state.theme = loadStored(THEME_KEY, "dark") === "light" ? "light" : "dark";
-  applyTheme();
+  localStorage.removeItem("monitor-theme");
   bindEvents();
   fillLoginHint();
   clearLoginForm();
@@ -1024,25 +1021,9 @@ function applySidebarCollapsed() {
   btn.setAttribute("aria-label", label);
 }
 
-function applyTheme() {
-  document.documentElement.dataset.theme = state.theme;
-  const btn = $("#themeToggle");
-  if (!btn) return;
-  const label = state.theme === "light" ? "Tema escuro" : "Tema claro";
-  btn.title = label;
-  btn.setAttribute("aria-label", label);
-  const text = btn.querySelector(".theme-label");
-  if (text) text.textContent = label;
-}
-
 function bindEvents() {
   on("#loginForm", "submit", handleLogin);
   on("#logoutButton", "click", logout);
-  on("#themeToggle", "click", () => {
-    state.theme = state.theme === "light" ? "dark" : "light";
-    saveStored(THEME_KEY, state.theme);
-    applyTheme();
-  });
   on("#sidebarCollapse", "click", () => {
     state.sidebarCollapsed = !state.sidebarCollapsed;
     saveStored(SIDEBAR_COLLAPSED_KEY, state.sidebarCollapsed ? "collapsed" : "expanded");
