@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=67" />
+    <link rel="stylesheet" href="styles.css?v=68" />
   </head>
   <body>
     <!-- LOADER -->
@@ -248,11 +248,10 @@
                   <h3>Ultimos lotes salvos</h3>
                 </div>
                 <div class="form-actions" style="margin:0">
-                  <button class="secondary" id="requestSiageSync" type="button">Nova atualização</button>
                   <button class="secondary" id="reloadSiageLots" type="button">Atualizar histórico</button>
                 </div>
               </div>
-              <p class="hint" id="siageSyncHint"></p>
+              <p class="hint" id="siageSyncHint">Para atualizar, rode no terminal, na pasta do projeto: <code>npm run siage:preview</code> (baixa do Metabase e mostra a comparação, sem gravar) e, se estiver tudo certo, <code>npm run siage:confirm</code> (grava o novo lote). São mantidos os 2 lotes mais recentes.</p>
               <div class="table-wrap">
                 <table>
                   <thead>
@@ -267,6 +266,7 @@
                 </table>
               </div>
             </article>
+            <div id="siageImportPreview"></div>
           </section>
 
           <!-- FORMAÇÕES -->
@@ -1202,6 +1202,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
-    <script src="app.js?v=83"></script>
+    <script src="app.js?v=84"></script>
   </body>
 </html>

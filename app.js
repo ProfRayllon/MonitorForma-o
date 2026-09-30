@@ -1029,7 +1029,6 @@ function bindEvents() {
     saveStored(SIDEBAR_COLLAPSED_KEY, state.sidebarCollapsed ? "collapsed" : "expanded");
     applySidebarCollapsed();
   });
-  on("#requestSiageSync", "click", showSiageSyncInstructions);
   on("#reloadSiageLots", "click", () => loadSiageLots({ force: true }));
   on("#directorsChoice", "click", showDirectorsArea);
   on("#teachersChoice", "click", () => openTeacherFormationReport(null));
@@ -1686,7 +1685,7 @@ function renderFormationMode() {
   $("#teachersOverviewBtn")?.classList.toggle("active", state.formationMode === "teachers" && !state.teacherFormationId);
   $("#teachersFormationsBtn")?.classList.toggle("active", state.formationMode === "teachers-list" || (state.formationMode === "teachers" && Boolean(state.teacherFormationId)));
   $("#teachersCoursesBtn")?.classList.toggle("active", state.formationMode === "courses");
-  $("#teachersAddBtn")?.classList.toggle("hidden", !isAdmin || !(state.formationMode === "teachers-list" || state.formationMode === "courses"));
+  $("#teachersAddBtn")?.classList.toggle("hidden", !isAdmin || state.tab !== "formation" || !(state.formationMode === "teachers-list" || state.formationMode === "courses"));
   $("#formationHome").classList.toggle("hidden", state.formationMode !== "home");
   $("#teachersListArea").classList.toggle("hidden", state.formationMode !== "teachers-list");
   $("#coursesArea").classList.toggle("hidden", state.formationMode !== "courses");
@@ -3871,31 +3870,46 @@ async function validateSiageImport(event) {
 
   await withButtonBusy($("#validateSiageBases"), "Validando...", async () => {
     try {
-      const files = {
-        professores: $("#siageProfessoresFile")?.files?.[0],
-      };
-      const professoresRows = await readTableFile(files.professores);
-      const professores = parseSiageProfessoresAtivos(professoresRows);
-      const data = {
-        professores,
-        escolas: deriveSiageEscolasFromProfessores(professores),
-      };
-      const validation = buildSiageValidation(data);
-      const previousSnapshot = await loadLatestSiageSnapshot();
-      const comparison = compareSiageSnapshots(data, previousSnapshot);
-      state.siageDraft = {
-        ...data,
-        ...validation,
-        comparison,
-        files: {
-          professores: files.professores?.name || "",
-        },
-      };
-      renderSiagePreview();
+      await buildSiageDraft($("#siageProfessoresFile")?.files?.[0]);
     } catch (error) {
       if (errEl) errEl.textContent = error?.message || "Nao foi possivel validar as bases.";
     }
   });
+}
+
+async function buildSiageDraft(file) {
+  const professoresRows = await readTableFile(file);
+  const professores = parseSiageProfessoresAtivos(professoresRows);
+  const data = {
+    professores,
+    escolas: deriveSiageEscolasFromProfessores(professores),
+  };
+  const validation = buildSiageValidation(data);
+  const previousSnapshot = await loadLatestSiageSnapshot();
+  const comparison = compareSiageSnapshots(data, previousSnapshot);
+  state.siageDraft = {
+    ...data,
+    ...validation,
+    comparison,
+    files: {
+      professores: file?.name || "",
+    },
+  };
+  renderSiagePreview();
+}
+
+async function cleanupOldSiageLots(keepLots = 2) {
+  const { data, error } = await db
+    .from("import_lotes")
+    .select("id")
+    .eq("tipo", "siage_semanal")
+    .eq("status", "concluido")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  const ids = (data || []).slice(keepLots).map((lot) => lot.id);
+  if (!ids.length) return;
+  const { error: deleteError } = await db.from("import_lotes").delete().in("id", ids);
+  if (deleteError) throw deleteError;
 }
 
 function clearSiageDraft() {
@@ -4037,6 +4051,7 @@ async function saveSiageImport() {
         .update({ status: "concluido" })
         .eq("id", loteId);
       if (updateError) throw updateError;
+      try { await cleanupOldSiageLots(2); } catch { /* limpeza não bloqueia o salvamento */ }
 
       state.base.schools = draft.escolas.map((row) => ({
         gre: row.gre,
@@ -4106,16 +4121,6 @@ function renderSiageLots() {
         </tr>`;
       }).join("")
     : `<tr><td colspan="4" class="empty-row">Nenhum lote SIAGE salvo ainda.</td></tr>`;
-}
-
-function showSiageSyncInstructions() {
-  const hint = $("#siageSyncHint");
-  const text = "Rotina segura: rode npm run siage:preview para ver a comparacao. Depois, confirme com npm run siage:sync ou npm run siage:confirm. O sistema mantem apenas os 2 lotes SIAGE concluidos mais recentes.";
-  if (hint) {
-    hint.textContent = text;
-    hint.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }
-  notify("Atualizacao SIAGE", "Use a rotina no terminal para baixar do Metabase sem expor credenciais no navegador.", "warning");
 }
 
 function renderSiage() {
