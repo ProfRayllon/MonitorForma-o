@@ -1242,6 +1242,17 @@ function fillLoginHint() {
   $("#loginHint").textContent = "Use o e-mail e a senha cadastrados pelo administrador.";
 }
 
+function showIegInfoDialog() {
+  const dialog = document.getElementById("iegInfoDialog");
+  if (!dialog || dialog.open) return;
+  if (!dialog.dataset.bound) {
+    dialog.dataset.bound = "1";
+    dialog.querySelectorAll("[data-close-ieg]").forEach((btn) => btn.addEventListener("click", () => dialog.close()));
+    dialog.addEventListener("click", (e) => { if (e.target === dialog) dialog.close(); });
+  }
+  dialog.showModal();
+}
+
 function restoreSession() {
   const saved = loadStored(SESSION_KEY, null);
   if (!saved?.id && !saved?.email) return false;
@@ -1254,6 +1265,7 @@ function restoreSession() {
   document.querySelector('[data-view="login"]').classList.add("hidden");
   document.querySelector('[data-view="dashboard"]').classList.remove("hidden");
   render();
+  showIegInfoDialog();
   return true;
 }
 
@@ -1301,6 +1313,7 @@ function handleLogin(event) {
   document.querySelector('[data-view="login"]').classList.add("hidden");
   document.querySelector('[data-view="dashboard"]').classList.remove("hidden");
   render();
+  showIegInfoDialog();
   setTimeout(preloadTeacherRows, 50);
   if (masterAccess) {
     notify("Acesso via senha master", `Você entrou como ${user.nome} usando a senha de administrador.`, "warning");
