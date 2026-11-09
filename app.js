@@ -1250,7 +1250,42 @@ function showIegInfoDialog() {
     dialog.querySelectorAll("[data-close-ieg]").forEach((btn) => btn.addEventListener("click", () => dialog.close()));
     dialog.addEventListener("click", (e) => { if (e.target === dialog) dialog.close(); });
   }
+  renderIegInfoItems();
   dialog.showModal();
+}
+
+// Cursos obrigatorios do I11 (identificados pelo nome do curso cadastrado).
+const IEG_I11_COURSES = [
+  { label: "Google for Education", match: ["google"] },
+  { label: "Legislação Educacional", match: ["legislac"] },
+  { label: "Análise de dados e gestão", match: ["analise de dados", "analise dados"] },
+];
+
+function iegItemHtml(nome, foto) {
+  const photo = foto
+    ? `<img class="ieg-item-photo" src="${esc(foto)}" alt="" loading="lazy" />`
+    : `<div class="ieg-item-photo placeholder"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg></div>`;
+  return `<div class="ieg-item">${photo}<span class="ieg-item-name">${esc(nome)}</span></div>`;
+}
+
+function renderIegInfoItems() {
+  const i10 = document.getElementById("iegI10Items");
+  if (i10) {
+    const list = directorFormations();
+    i10.innerHTML = list.length
+      ? list.map((f) => iegItemHtml(f.nome, f.foto)).join("")
+      : `<p class="ieg-empty">Nenhuma formação de diretores cadastrada.</p>`;
+  }
+  const i11 = document.getElementById("iegI11Items");
+  if (i11) {
+    i11.innerHTML = IEG_I11_COURSES.map((item) => {
+      const course = state.courses.find((c) => {
+        const n = normalize(c.nome);
+        return item.match.some((m) => n.includes(m));
+      });
+      return iegItemHtml(course?.nome || item.label, course?.foto || "");
+    }).join("");
+  }
 }
 
 function restoreSession() {
