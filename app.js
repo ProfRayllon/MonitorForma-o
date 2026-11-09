@@ -111,13 +111,35 @@ const normalizeCpf = (value) => {
   return digits.length >= 9 && digits.length <= 11 ? digits.padStart(11, "0") : "";
 };
 const TEACHER_STATUS_DONE = "Conclu\u00eddo";
-const TEACHER_STATUS_NOT_DONE = "N\u00e3o conclu\u00eddo";
-const TEACHER_STATUS_NOT_STARTED = TEACHER_STATUS_NOT_DONE;
+const TEACHER_STATUS_IN_PROGRESS = "Em andamento";
+const TEACHER_STATUS_NOT_STARTED = "N\u00e3o iniciado";
+const TEACHER_STATUS_NO_ENROLLMENT = "Sem matr\u00edcula no curso";
+// Mantido como alias para trechos que tratam "nao concluido" de forma generica.
+const TEACHER_STATUS_NOT_DONE = TEACHER_STATUS_NOT_STARTED;
+const TEACHER_STATUSES = [TEACHER_STATUS_DONE, TEACHER_STATUS_IN_PROGRESS, TEACHER_STATUS_NOT_STARTED, TEACHER_STATUS_NO_ENROLLMENT];
+const TEACHER_STATUS_RANK = {
+  [TEACHER_STATUS_NO_ENROLLMENT]: 0,
+  [TEACHER_STATUS_NOT_STARTED]: 1,
+  [TEACHER_STATUS_IN_PROGRESS]: 2,
+  [TEACHER_STATUS_DONE]: 3,
+};
 const isTeacherDoneStatus = (value) => {
   const n = normalize(value);
-  return !n.includes("nao") && (n.includes("conclu") || n.includes("aprov") || n.includes("finaliz"));
+  return !n.includes("nao") && !n.includes("sem") && (n.includes("conclu") || n.includes("aprov") || n.includes("finaliz"));
 };
-const teacherDisplayStatus = (value) => isTeacherDoneStatus(value) ? TEACHER_STATUS_DONE : TEACHER_STATUS_NOT_DONE;
+const teacherStatusFromText = (value) => {
+  const n = normalize(value);
+  if (!n) return "";
+  if (n.includes("matric") || n.includes("sem") || n.includes("inscri")) return TEACHER_STATUS_NO_ENROLLMENT;
+  if (n.includes("andamento") || n.includes("cursando") || n.includes("progresso")) return TEACHER_STATUS_IN_PROGRESS;
+  if (n.includes("nao") && n.includes("inici")) return TEACHER_STATUS_NOT_STARTED;
+  if (isTeacherDoneStatus(value)) return TEACHER_STATUS_DONE;
+  if (n.includes("nao") || n.includes("pendente") || n.includes("reprov")) return TEACHER_STATUS_NOT_STARTED;
+  if (n.includes("inici")) return TEACHER_STATUS_IN_PROGRESS;
+  return "";
+};
+const teacherDisplayStatus = (value) => teacherStatusFromText(value) || TEACHER_STATUS_NOT_STARTED;
+const higherTeacherStatus = (a, b) => ((TEACHER_STATUS_RANK[b] ?? -1) > (TEACHER_STATUS_RANK[a] ?? -1) ? b : a);
 const pct = (value, total) => (!total ? "0%" : `${Math.round((value / total) * 100)}%`);
 const slug = (value) =>
   normalize(value)
@@ -4352,7 +4374,7 @@ function getTeacherRosterBaseRows() {
     escola: item.escola,
     conclusao: 0,
     media: 0,
-    resultado: TEACHER_STATUS_NOT_DONE,
+    resultado: TEACHER_STATUS_NO_ENROLLMENT,
     cursoId: state.teacherFilterCourseIds?.length === 1 ? state.teacherFilterCourseIds[0] : null,
     formacaoId: state.teacherFormationId,
     fixedRoster: true,
@@ -4545,7 +4567,8 @@ function parseTeacherRows(rows2D) {
     const media = mediaRaw ? Math.max(0, parseFloat(mediaRaw.replace(",", ".")) || 0) : 0;
 
     const resultadoRaw = col(row, "resultado", "status", "situacao");
-    const resultado = resultadoRaw || (conclusao >= 100 ? "Concluído" : "Não concluído");
+    const resultado = teacherStatusFromText(resultadoRaw)
+      || (conclusao >= 100 ? TEACHER_STATUS_DONE : conclusao > 0 ? TEACHER_STATUS_IN_PROGRESS : TEACHER_STATUS_NOT_STARTED);
 
     const school = schoolByInep.get(inep);
     rows.push({ nome, email, inep, gre: school?.gre || "", escola: school?.escola || "", conclusao, media, resultado });
@@ -4576,15 +4599,12 @@ function parseTeacherRowsWithFixedRoster(rows2D) {
 
   const schoolByInep = new Map();
   (state.base?.schools || []).forEach((s) => schoolByInep.set(String(s.inep), s));
-  const statusRank = { [TEACHER_STATUS_NOT_DONE]: 0, [TEACHER_STATUS_DONE]: 1 };
   const normalizeTeacherStatus = (raw, conclusao) => {
-    const n = normalize(raw);
-    if (n.includes("nao") && (n.includes("conclu") || n.includes("conlcu") || n.includes("finaliz") || n.includes("aprov"))) return TEACHER_STATUS_NOT_DONE;
-    if (n.includes("pendente") || n.includes("reprov")) return TEACHER_STATUS_NOT_DONE;
-    if (n.includes("conclu") || n.includes("aprov") || n.includes("finaliz")) return TEACHER_STATUS_DONE;
-    if (n.includes("nao") && n.includes("inici")) return TEACHER_STATUS_NOT_DONE;
-    if (n.includes("andamento") || n.includes("cursando") || n.includes("inici")) return TEACHER_STATUS_NOT_DONE;
-    return conclusao >= 100 ? TEACHER_STATUS_DONE : TEACHER_STATUS_NOT_DONE;
+    const status = teacherStatusFromText(raw);
+    if (status) return status;
+    if (conclusao >= 100) return TEACHER_STATUS_DONE;
+    if (conclusao > 0) return TEACHER_STATUS_IN_PROGRESS;
+    return TEACHER_STATUS_NOT_STARTED;
   };
 
   const byIdentity = new Map();
@@ -4629,7 +4649,7 @@ function parseTeacherRowsWithFixedRoster(rows2D) {
     } else {
       current.conclusao = Math.max(current.conclusao || 0, item.conclusao || 0);
       current.media = Math.max(current.media || 0, item.media || 0);
-      if ((statusRank[item.resultado] ?? 0) > (statusRank[current.resultado] ?? 0)) current.resultado = item.resultado;
+      current.resultado = higherTeacherStatus(current.resultado, item.resultado);
       if (!current.email && item.email) current.email = item.email;
     }
   });
@@ -4719,6 +4739,7 @@ function getTeacherSchoolRows() {
         total: 0,
         concluidos: 0,
         naoIniciados: 0,
+        statusCounts: Object.fromEntries(TEACHER_STATUSES.map((s) => [s, 0])),
         somaMedia: 0,
       });
     }
@@ -4726,6 +4747,7 @@ function getTeacherSchoolRows() {
     entry.total++;
     if (isTeacherDoneStatus(r.resultado)) entry.concluidos++;
     else entry.naoIniciados++;
+    entry.statusCounts[teacherDisplayStatus(r.resultado)]++;
     entry.somaMedia += r.media || 0;
   });
 
@@ -4737,6 +4759,7 @@ function getTeacherSchoolRows() {
     total: e.total,
     concluidos: e.concluidos,
     naoIniciados: e.naoIniciados,
+    statusCounts: e.statusCounts,
     mediaEscola: e.total > 0 ? Math.round((e.somaMedia / e.total) * 10) / 10 : 0,
     pct: e.total > 0 ? Math.round((e.concluidos / e.total) * 100) : 0,
   }));
@@ -4769,8 +4792,7 @@ function filteredTeacherSchoolRows() {
 
   return schools.filter((s) => {
     if (greF !== "todos" && s.gre !== greF) return false;
-    if (concF === "Concluído" && s.concluidos === 0) return false;
-    if (concF === "Não concluído" && s.naoIniciados === 0) return false;
+    if (concF !== "todos" && !(s.statusCounts?.[concF] > 0)) return false;
     if (q) {
       const text = normalize(`${s.gre} ${s.inep} ${s.escola}`);
       if (!text.includes(q)) return false;
@@ -4817,9 +4839,7 @@ function getFilteredTeacherRowsByReportFilters() {
     }
     if ((row.conclusao || 0) > (current.conclusao || 0)) current.conclusao = row.conclusao || 0;
     if ((row.media || 0) > (current.media || 0)) current.media = row.media || 0;
-    current.resultado = isTeacherDoneStatus(row.resultado) || isTeacherDoneStatus(current.resultado)
-      ? TEACHER_STATUS_DONE
-      : TEACHER_STATUS_NOT_DONE;
+    current.resultado = higherTeacherStatus(teacherDisplayStatus(current.resultado), teacherDisplayStatus(row.resultado));
     if (!current.email && row.email) current.email = row.email;
     if (!current.importedAt && row.importedAt) current.importedAt = row.importedAt;
   });
@@ -5532,7 +5552,9 @@ function renderTeachersArea() {
       state._teacherRegionalPersonStats = { pct: pctGeral, concluidos: totalConcluidos, total: totalInscritos };
       renderTeacherRegionalGauge(schoolRows);
 
-      state._teacherPersonStatusCounts = { concluidos: totalConcluidos, naoIniciados: totalNaoIniciados };
+      const byStatus = Object.fromEntries(TEACHER_STATUSES.map((s) => [s, 0]));
+      allPersonRows.forEach((r) => { byStatus[teacherDisplayStatus(r.resultado)]++; });
+      state._teacherPersonStatusCounts = { concluidos: totalConcluidos, naoIniciados: totalNaoIniciados, byStatus };
       renderTeacherStatusChart(state._teacherPersonStatusCounts);
     }
   }
@@ -5567,8 +5589,10 @@ function niceScaleMax(value) {
 }
 
 const STATUS_SEGMENT_COLORS = [
-  { key: "Não concluído", label: "Não concluído", color: "#f43f5e" },
-  { key: "Concluído", label: "Concluído", color: "#10b981" },
+  { key: TEACHER_STATUS_DONE, label: TEACHER_STATUS_DONE, color: "#10b981" },
+  { key: TEACHER_STATUS_IN_PROGRESS, label: TEACHER_STATUS_IN_PROGRESS, color: "#f59e0b" },
+  { key: TEACHER_STATUS_NOT_STARTED, label: TEACHER_STATUS_NOT_STARTED, color: "#f43f5e" },
+  { key: TEACHER_STATUS_NO_ENROLLMENT, label: TEACHER_STATUS_NO_ENROLLMENT, color: "#64748b" },
 ];
 
 function renderTeacherRegionalGauge(schoolRows) {
@@ -5624,8 +5648,9 @@ function renderTeacherStatusChart(personCounts) {
   if (!plotEl || !legendEl) return;
 
   const activeFilter = state.teachersConclusaoFilter;
-  const total = personCounts.concluidos + personCounts.naoIniciados;
-  const segments = STATUS_SEGMENT_COLORS.map((seg) => ({ ...seg, value: seg.key === "Não concluído" ? personCounts.naoIniciados : personCounts.concluidos }));
+  const byStatus = personCounts.byStatus || {};
+  const segments = STATUS_SEGMENT_COLORS.map((seg) => ({ ...seg, value: byStatus[seg.key] || 0 }));
+  const total = segments.reduce((s, seg) => s + seg.value, 0);
 
   const niceMax = niceScaleMax(Math.max(1, ...segments.map((s) => s.value)));
   const tickCount = 5;
@@ -5942,7 +5967,12 @@ function renderTeachersTable() {
   };
   const resultadoPill = (res) => {
     const status = teacherDisplayStatus(res);
-    const map = { [TEACHER_STATUS_DONE]: "ok", [TEACHER_STATUS_NOT_DONE]: "no" };
+    const map = {
+      [TEACHER_STATUS_DONE]: "ok",
+      [TEACHER_STATUS_IN_PROGRESS]: "wait",
+      [TEACHER_STATUS_NOT_STARTED]: "no",
+      [TEACHER_STATUS_NO_ENROLLMENT]: "muted",
+    };
     return `<span class="pill ${map[status] || "no"}">${esc(status)}</span>`;
   };
   const sortArrow = (key, sortKeyState, sortDirState) => {

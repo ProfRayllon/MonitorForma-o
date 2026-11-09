@@ -2837,6 +2837,7 @@ tbody tr:last-child td { border-bottom: 0; }
 .pill.ok   { color: #05261a; background: var(--ok); }
 .pill.wait { color: #2a1c00; background: var(--wait); }
 .pill.no   { color: #2a0510; background: var(--danger); }
+.pill.muted { color: #e2e8f0; background: #475569; white-space: nowrap; }
 
 /* ─── FORM LAYOUT ────────────────────────────────────────────────────────── */
 .formation-form { display: grid; gap: 14px; margin-bottom: 14px; }
